@@ -102,6 +102,7 @@ impl App {
                 }
                 KeyCode::Backspace => {
                     let tgt_line: &mut String;
+                    let prev_line: &mut String;
                     if (!self.insert_mode) {
                         tgt_line = &mut self.command_buf;
                         if (self.status_message) {
@@ -110,13 +111,21 @@ impl App {
                             return;
                         }
                     } else {
-                        if (self.cursor_pos_xy.0 == 0) {
+                        if (self.cursor_pos_xy.0 == 0) && (self.cursor_pos_xy.1 == 0) {
                             return;
                         }
-                        tgt_line = self
-                            .input_buf
-                            .get_mut(self.cursor_pos_xy.1 as usize)
-                            .expect("can't get target line");
+                        let (before, after) =
+                            self.input_buf.split_at_mut(self.cursor_pos_xy.1 as usize);
+                        tgt_line = after.get_mut(0).expect("can't get cur line!");
+
+                        if (self.cursor_pos_xy.0 == 0) {
+                            prev_line = before.last_mut().expect("can't get prev line");
+                            self.cursor_pos_xy.0 = (prev_line.len() - 1) as u16;
+                            prev_line.push_str(tgt_line);
+                            self.input_buf.remove(self.cursor_pos_xy.1 as usize);
+                            self.cursor_pos_xy.1 -= 1;
+                            return;
+                        }
                     }
 
                     let curpos_x_bordered = if (self.cursor_pos_xy.0 == 0) {
@@ -293,7 +302,8 @@ impl App {
             }
         };
 
-        let contents = self.input_buf.join("\n");
+        let mut contents: String = self.input_buf.join("\n");
+        contents.push('\n');
         match file_out.write_all(contents.as_bytes()) {
             Ok(_) => self.throw_status_message("Success".to_string()),
             Err(e) => self.throw_status_message(e.to_string()),
