@@ -19,7 +19,6 @@ pub struct App {
     pub commands: HashMap<String, Operation>,
     pub status_message: bool,
     pub cur_filename: String,
-    pub viewport_height: u16,
     pub scroll_offset: usize,
 }
 type Operation = fn(&mut App, Vec<String>);
@@ -36,7 +35,6 @@ impl App {
         let sav_cpos_xy: (u16, u16) = (0, 0);
         let stat_msg: bool = false;
         let cur_filename: String = String::new();
-        let v_height: u16 = 0;
         let scroll: usize = 0;
 
         let mut app = App {
@@ -50,7 +48,6 @@ impl App {
             saved_cursor_pos_xy: sav_cpos_xy,
             status_message: stat_msg,
             cur_filename: cur_filename,
-            viewport_height: v_height,
             scroll_offset: scroll,
         };
         app.gen_hashmap_com();
@@ -58,9 +55,9 @@ impl App {
     }
 
     pub fn handle_input(&mut self, event: Event) {
-        if let Event::Key(key) = event {
-            match key.code {
-                KeyCode::Insert => {
+        match event {
+            Event::Key(key) => match key.code {
+                KeyCode::Insert | KeyCode::Esc => {
                     std::mem::swap(&mut self.cursor_pos_xy, &mut self.saved_cursor_pos_xy);
                     self.insert_mode = !self.insert_mode;
                 }
@@ -204,22 +201,21 @@ impl App {
                     self.scroll_offset = self.input_buf.len() - 1;
                 }
                 _ => {}
-            }
+            },
+            // Event::Mouse(m_ev) => match m_ev.kind {
+            //     MouseEventKind::ScrollUp => { // doesn't work in ratatui for some reason...
+            //         if (self.scroll_offset == 0) {
+            //             return;
+            //         }
+            //         self.scroll_offset -= 1;
+            //     }
+            //     MouseEventKind::ScrollDown => {
+            //         self.scroll_offset += 1;
+            //     }
+            //     _ => {}
+            // },
+            _ => {}
         }
-        // if let Event::Mouse(m_ev) = event {
-        //     match m_ev.kind {
-        //         MouseEventKind::ScrollUp => {
-        //             if (self.scroll_offset == 0) {
-        //                 return;
-        //             }
-        //             self.scroll_offset -= 1;
-        //         }
-        //         MouseEventKind::ScrollDown => {
-        //             self.scroll_offset += 1;
-        //         }
-        //         _ => {}
-        //     }
-        // }
     }
 
     fn move_cursor_vert(&mut self, delta: isize) {

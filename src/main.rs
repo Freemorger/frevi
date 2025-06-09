@@ -1,4 +1,5 @@
 mod app;
+mod tabs;
 use crate::app::App;
 use crossterm::event::{self, Event};
 use ratatui::{
@@ -87,7 +88,8 @@ fn draw(frame: &mut Frame, app: &App) {
     if (app.insert_mode) {
         status_str.push_str("\t -- INSERT -- \t");
 
-        let digits_ctr = num_decimal_digits(app.cursor_pos_xy.1) as u16;
+        let digits_ctr =
+            num_decimal_digits(app.scroll_offset + (app.cursor_pos_xy.1 as usize) + 1) as u16;
         frame.set_cursor_position(Position::new(
             right_area.x + app.cursor_pos_xy.0 + 2 + digits_ctr, //adding y for line counter
             right_area.y + app.cursor_pos_xy.1,
