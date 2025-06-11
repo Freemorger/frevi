@@ -652,6 +652,8 @@ impl App {
                 let newtab = Tab::new(None);
                 self.tabs.push(newtab);
                 self.cur_tab = 0;
+            } else if (self.cur_tab >= self.tabs.len()) {
+                self.cur_tab = self.cur_tab.saturating_sub(1);
             }
             self.throw_status_message("Success".to_string());
             return;
