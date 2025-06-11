@@ -5,7 +5,9 @@ use std::{
     process::Command,
 };
 
-use crossterm::event::{Event, KeyCode, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEventKind};
+
+use crate::tabs::Tab;
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -20,6 +22,9 @@ pub struct App {
     pub status_message: bool,
     pub cur_filename: String,
     pub scroll_offset: usize,
+    pub tabs: Vec<Tab>,
+    pub cur_tab: usize,
+    pub version: String,
 }
 type Operation = fn(&mut App, Vec<String>);
 
@@ -36,6 +41,9 @@ impl App {
         let stat_msg: bool = false;
         let cur_filename: String = String::new();
         let scroll: usize = 0;
+        let tabsv: Vec<Tab> = vec![Tab::new(None)];
+        let curtab: usize = 0;
+        let vers: &str = env!("CARGO_PKG_VERSION");
 
         let mut app = App {
             insert_mode: ins_mod,
@@ -49,6 +57,9 @@ impl App {
             status_message: stat_msg,
             cur_filename: cur_filename,
             scroll_offset: scroll,
+            tabs: tabsv,
+            cur_tab: curtab,
+            version: vers.to_string(),
         };
         app.gen_hashmap_com();
         app
@@ -56,7 +67,7 @@ impl App {
 
     pub fn handle_input(&mut self, event: Event) {
         match event {
-            Event::Key(key) => match key.code {
+            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Insert | KeyCode::Esc => {
                     std::mem::swap(&mut self.cursor_pos_xy, &mut self.saved_cursor_pos_xy);
                     self.insert_mode = !self.insert_mode;
@@ -200,6 +211,9 @@ impl App {
                 KeyCode::End => {
                     self.scroll_offset = self.input_buf.len() - 1;
                 }
+                KeyCode::F(num) => {
+                    self.cur_tab = num.min((self.tabs.len()) as u8) as usize;
+                }
                 _ => {}
             },
             // Event::Mouse(m_ev) => match m_ev.kind {
@@ -272,6 +286,7 @@ impl App {
         self.commands.insert("!q".to_string(), App::com_q);
         self.commands.insert("!exec".to_string(), App::com_exec);
         self.commands.insert("!exec_f".to_string(), App::com_exec_f);
+        self.commands.insert("!tab".to_string(), App::com_tab);
     }
 
     fn com_hi(&mut self, args: Vec<String>) {
@@ -404,5 +419,86 @@ impl App {
             output_s = String::from_utf8_lossy(&com.stdout).to_string();
         }
         self.throw_status_message(output_s);
+    }
+
+    fn com_tab(&mut self, args: Vec<String>) {
+        if (args.is_empty()) {
+            self.throw_status_message(
+                "Usage: !tab new, !tab goto num, !tab rm num, !tab next, !tab prev, !tab rename num name".to_string(),
+            );
+            return;
+        }
+        if (args[0] == "new") {
+            self.tabs.push(Tab::new(None));
+            self.throw_status_message("Success".to_string());
+            return;
+        }
+        if (args[0] == "goto") {
+            let ind: usize = match args[1].parse() {
+                Ok(n) => n,
+                Err(e) => {
+                    self.throw_status_message(e.to_string());
+                    return;
+                }
+            };
+            if (ind > self.tabs.len()) {
+                self.throw_status_message("Tab with specified indice not opened".to_string());
+                return;
+            }
+            self.cur_tab = ind.saturating_sub(1);
+            self.throw_status_message("Success".to_string());
+            return;
+        }
+        if (args[0] == "rm") {
+            let ind: usize = match args[1].parse() {
+                Ok(n) => n,
+                Err(e) => {
+                    self.throw_status_message(e.to_string());
+                    return;
+                }
+            };
+            if (ind >= self.tabs.len()) {
+                self.throw_status_message("Tab with specified indice not opened".to_string());
+                return;
+            }
+            self.tabs.remove(ind);
+            self.throw_status_message("Success".to_string());
+            return;
+        }
+        if (args[0] == "next") {
+            if (self.cur_tab + 1 >= self.tabs.len()) {
+                self.throw_status_message("Current tab is already last!".to_string());
+                return;
+            }
+            self.cur_tab += 1;
+            self.throw_status_message("Success".to_string());
+            return;
+        }
+        if (args[0] == "prev") {
+            if (self.cur_tab == 0) {
+                self.throw_status_message("Current tab is first!".to_string());
+                return;
+            }
+            self.cur_tab -= 1;
+            self.throw_status_message("Success".to_string());
+            return;
+        }
+        if (args[0] == "rename") {
+            let ind: usize = match args[1].parse() {
+                Ok(n) => n,
+                Err(e) => {
+                    self.throw_status_message(e.to_string());
+                    return;
+                }
+            };
+            if (ind > self.tabs.len()) {
+                self.throw_status_message("Tab with specified indice not opened".to_string());
+                return;
+            }
+            let new_name: String = args[2..].join(" ");
+            self.tabs[ind.saturating_sub(1)].displayed_name = new_name;
+            self.throw_status_message("Success".to_string());
+            return;
+        }
     }
 }

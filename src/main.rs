@@ -12,7 +12,7 @@ use ratatui::{
     prelude::Stylize,
     style::{Color, Style},
     text::{Line, Text},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Tabs, Widget},
 };
 
 fn main() {
@@ -31,10 +31,10 @@ fn main() {
 }
 
 fn draw(frame: &mut Frame, app: &App) {
-    let mut vert_length: u16 = 0;
+    let mut vert_length: u16 = 2;
     let mut stat_length: u16 = 1;
     if (!app.cur_filename.is_empty()) {
-        vert_length = 2;
+        vert_length = 3;
     }
 
     let vertical = Layout::vertical([Length(vert_length), Min(0), Length(stat_length)]);
@@ -51,6 +51,16 @@ fn draw(frame: &mut Frame, app: &App) {
     }
     let available_length: u16 = frame.area().height - vert_length - stat_length;
 
+    let title_area_chunks = Layout::vertical([Fill(1), Length(vert_length - 1)]).split(title_area);
+    let tabs = Tabs::new(
+        app.tabs
+            .iter()
+            .map(|cur_tab| cur_tab.displayed_name.as_str()),
+    )
+    .select(app.cur_tab)
+    .style(Style::default())
+    .highlight_style(Style::default().fg(Color::LightCyan).bold())
+    .divider("|");
     let title = Paragraph::new(app.cur_filename.clone())
         .block(
             Block::default()
@@ -58,7 +68,8 @@ fn draw(frame: &mut Frame, app: &App) {
                 .border_style(Style::default().fg(Color::White)),
         )
         .style(Style::default().fg(Color::Yellow).bold());
-    frame.render_widget(title, title_area);
+    frame.render_widget(title, title_area_chunks[1]);
+    frame.render_widget(tabs, title_area_chunks[0]);
 
     let start_line = if (app.scroll_offset >= app.input_buf.len()) {
         app.input_buf.len()
@@ -103,20 +114,6 @@ fn draw(frame: &mut Frame, app: &App) {
 
     let status_text = Text::raw(status_str);
     frame.render_widget(status_text, status_area);
-
-    // let debug_info = format!(
-    //     "Scroll: {}/{} | Lines: {}-{} | Total: {}",
-    //     app.scroll_offset,
-    //     app.input_buf
-    //         .len()
-    //         .saturating_sub(available_length as usize),
-    //     start_line + 1,
-    //     end_line,
-    //     app.input_buf.len()
-    // );
-
-    // let status = Paragraph::new(debug_info);
-    // frame.render_widget(status, status_area);
 }
 
 fn num_decimal_digits<T: std::fmt::Display>(n: T) -> usize {

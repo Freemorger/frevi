@@ -1,3 +1,11 @@
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Error},
+};
+
+use crate::app::App;
+
+#[derive(Debug, Clone)]
 pub struct Tab {
     pub filename: String,
     pub buf: Vec<String>,
@@ -7,11 +15,13 @@ pub struct Tab {
 }
 
 impl Tab {
-    pub fn new(filename: String, displayed_name: Option<String>) -> Tab {
-        let fname: String = filename;
+    // Creates a new tab with name.
+    // Sets name "New tab" if other not passed
+    pub fn new(displayed_name: Option<String>) -> Tab {
+        let fname: String = String::new();
         let buf: Vec<String> = vec![String::new()];
         let cursor_pos: (usize, usize) = (0, 0);
-        let displayed_n = displayed_name.unwrap_or(fname.clone());
+        let displayed_n = displayed_name.unwrap_or("New tab".to_string());
         let changes: bool = false;
 
         Tab {
@@ -21,5 +31,20 @@ impl Tab {
             displayed_name: displayed_n,
             changed: changes,
         }
+    }
+
+    // Reads file into tab
+    pub fn readf(&mut self, filename: String) -> Result<(), std::io::Error> {
+        self.filename = filename.clone();
+        let mut file: File = match File::open(filename) {
+            Ok(f) => f,
+            Err(e) => return Err(e),
+        };
+        let buf_reader = BufReader::new(file);
+        for line in buf_reader.lines() {
+            self.buf.push(line.expect("Can't parse line!"));
+        }
+
+        Ok(())
     }
 }
