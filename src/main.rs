@@ -31,9 +31,11 @@ fn main() {
 }
 
 fn draw(frame: &mut Frame, app: &App) {
+    let curtab = &app.tabs[app.cur_tab];
+
     let mut vert_length: u16 = 2;
-    let mut stat_length: u16 = 1;
-    if (!app.cur_filename.is_empty()) {
+    let stat_length: u16 = 1;
+    if (!curtab.filename.is_empty()) {
         vert_length = 3;
     }
 
@@ -61,7 +63,11 @@ fn draw(frame: &mut Frame, app: &App) {
     .style(Style::default())
     .highlight_style(Style::default().fg(Color::LightCyan).bold())
     .divider("|");
-    let title = Paragraph::new(app.cur_filename.clone())
+    let title_text = match curtab.changed {
+        true => curtab.filename.clone() + " *",
+        false => curtab.filename.clone(),
+    };
+    let title = Paragraph::new(title_text)
         .block(
             Block::default()
                 .borders(Borders::BOTTOM)
@@ -71,18 +77,11 @@ fn draw(frame: &mut Frame, app: &App) {
     frame.render_widget(title, title_area_chunks[1]);
     frame.render_widget(tabs, title_area_chunks[0]);
 
-    let start_line = if (app.scroll_offset >= app.input_buf.len()) {
-        app.input_buf.len()
-    } else {
-        app.scroll_offset
-    };
-    let end_line = if (app.scroll_offset + (available_length as usize)) > app.input_buf.len() {
-        app.input_buf.len()
-    } else {
-        app.scroll_offset + (available_length as usize)
-    };
+    let buf_len = curtab.buf.len();
+    let start_line = curtab.scroll_offset.min(buf_len);
+    let end_line = (curtab.scroll_offset + available_length as usize).min(buf_len);
 
-    let visible_text = app.input_buf[start_line..end_line]
+    let visible_text = curtab.buf[start_line..end_line]
         .iter()
         .enumerate()
         .map(|(i, line)| format!("{}: {}", i + start_line + 1, line))
@@ -100,10 +99,10 @@ fn draw(frame: &mut Frame, app: &App) {
         status_str.push_str("\t -- INSERT -- \t");
 
         let digits_ctr =
-            num_decimal_digits(app.scroll_offset + (app.cursor_pos_xy.1 as usize) + 1) as u16;
+            num_decimal_digits(curtab.scroll_offset + (curtab.cursor_xy.1 as usize) + 1) as u16;
         frame.set_cursor_position(Position::new(
-            right_area.x + app.cursor_pos_xy.0 + 2 + digits_ctr, //adding y for line counter
-            right_area.y + app.cursor_pos_xy.1,
+            right_area.x + (curtab.cursor_xy.0 as u16) + 2 + digits_ctr, //adding y for line counter
+            right_area.y + curtab.cursor_xy.1 as u16,
         ));
     } else if (!app.command_buf.is_empty()) {
         frame.set_cursor_position(Position::new(

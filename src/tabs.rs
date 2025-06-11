@@ -12,6 +12,7 @@ pub struct Tab {
     pub cursor_xy: (usize, usize),
     pub displayed_name: String,
     pub changed: bool,
+    pub scroll_offset: usize,
 }
 
 impl Tab {
@@ -23,6 +24,7 @@ impl Tab {
         let cursor_pos: (usize, usize) = (0, 0);
         let displayed_n = displayed_name.unwrap_or("New tab".to_string());
         let changes: bool = false;
+        let sc_offset: usize = 0;
 
         Tab {
             filename: fname,
@@ -30,6 +32,7 @@ impl Tab {
             cursor_xy: cursor_pos,
             displayed_name: displayed_n,
             changed: changes,
+            scroll_offset: sc_offset,
         }
     }
 
