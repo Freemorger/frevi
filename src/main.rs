@@ -19,6 +19,18 @@ fn main() {
     let mut app = App::new();
     app.running = true;
 
+    match std::env::args().nth(1) {
+        // opening file from cli
+        Some(s) => match app.tabs[0].readf(s.clone()) {
+            Ok(()) => {}
+            Err(e) => {
+                let err_msg: String = "While opening file: ".to_string() + &e.to_string();
+                app.throw_status_message(err_msg.clone());
+            }
+        },
+        None => {}
+    };
+
     let mut terminal = ratatui::init();
     while (app.running) {
         terminal

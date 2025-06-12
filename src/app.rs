@@ -13,15 +13,12 @@ use crate::tabs::Tab;
 #[derive(Debug, Clone)]
 pub struct App {
     pub insert_mode: bool,
-    pub input_buf: Vec<String>,
     pub running: bool,
     pub left_area_open: bool,
     pub cursor_pos_xy: (u16, u16),
-    pub saved_cursor_pos_xy: (u16, u16),
     pub command_buf: String,
     pub commands: HashMap<String, Operation>,
     pub status_message: bool,
-    pub cur_filename: String,
     pub tabs: Vec<Tab>,
     pub cur_tab: usize,
     pub version: String,
@@ -31,30 +28,24 @@ type Operation = fn(&mut App, Vec<String>);
 impl App {
     pub fn new() -> App {
         let ins_mod: bool = false;
-        let in_buf: Vec<String> = vec![String::new()];
         let run: bool = true;
         let left_open: bool = false;
         let cpos_xy: (u16, u16) = (0, 0);
         let com_buf: String = String::new();
         let coms: HashMap<String, Operation> = HashMap::new();
-        let sav_cpos_xy: (u16, u16) = (0, 0);
         let stat_msg: bool = false;
-        let cur_filename: String = String::new();
         let tabsv: Vec<Tab> = vec![Tab::new(None)];
         let curtab: usize = 0;
         let vers: &str = env!("CARGO_PKG_VERSION");
 
         let mut app = App {
             insert_mode: ins_mod,
-            input_buf: in_buf,
             running: run,
             left_area_open: left_open,
             cursor_pos_xy: cpos_xy,
             command_buf: com_buf,
             commands: coms,
-            saved_cursor_pos_xy: sav_cpos_xy,
             status_message: stat_msg,
-            cur_filename: cur_filename,
             tabs: tabsv,
             cur_tab: curtab,
             version: vers.to_string(),
@@ -88,7 +79,17 @@ impl App {
                                 }
                             }
                         }
-                        self.command_buf.insert(self.cursor_pos_xy.0 as usize, ch);
+                        //self.command_buf.insert(self.cursor_pos_xy.0 as usize, ch);
+                        let char_pos = self.cursor_pos_xy.0 as usize;
+                        let byte_idx = self
+                            .command_buf
+                            .char_indices()
+                            .nth(char_pos)
+                            .map(|(idx, _)| idx)
+                            .unwrap_or(self.command_buf.len()); // insert at end if position is out of bounds
+
+                        self.command_buf.insert(byte_idx, ch);
+
                         self.cursor_pos_xy.0 += 1;
                         return;
                     }
@@ -98,9 +99,9 @@ impl App {
                 KeyCode::Backspace => {
                     let tgt_line: &mut String;
                     let prev_line: &mut String;
-                    if (!self.insert_mode) {
+                    if !self.insert_mode {
                         tgt_line = &mut self.command_buf;
-                        if (self.status_message) {
+                        if self.status_message {
                             self.command_buf = "".to_string();
                             self.status_message = !self.status_message;
                             return;
@@ -110,14 +111,23 @@ impl App {
                         return;
                     }
 
-                    let curpos_x_bordered = if (self.cursor_pos_xy.0 == 0) {
+                    let curpos_x_bordered = if self.cursor_pos_xy.0 == 0 {
                         self.cursor_pos_xy.0
                     } else {
                         self.cursor_pos_xy.0 - 1
                     };
-                    if (curpos_x_bordered < tgt_line.len() as u16) {
-                        tgt_line.remove((curpos_x_bordered) as usize);
-                        self.cursor_pos_xy.0 = curpos_x_bordered;
+
+                    // non ascii support stuff (should be extracted into function later)
+                    let char_count = tgt_line.chars().count() as u16;
+                    if curpos_x_bordered < char_count {
+                        if let Some(idx) = tgt_line
+                            .char_indices()
+                            .nth(curpos_x_bordered as usize)
+                            .map(|(i, _)| i)
+                        {
+                            tgt_line.remove(idx);
+                            self.cursor_pos_xy.0 = curpos_x_bordered;
+                        }
                     }
                 }
                 KeyCode::Left => {
@@ -171,6 +181,12 @@ impl App {
                     self.tab_update_scroll(usize::MAX); // this will work due to clamp inside function.
                 }
                 KeyCode::F(num) => {
+                    if (num as usize > self.tabs.len()) {
+                        let newtab = Tab::new(None);
+                        self.tabs.push(newtab);
+                        self.cur_tab = self.tabs.len().saturating_sub(1);
+                        return;
+                    }
                     self.cur_tab = num
                         .saturating_sub(1)
                         .min(self.tabs.len().saturating_sub(1) as u8)
@@ -211,8 +227,7 @@ impl App {
         let line_y = cur_tab.cursor_xy.1;
         let tgt_line = &cur_tab.buf[line_y];
 
-        let new_x =
-            ((cur_tab.cursor_xy.0 as isize) + delta).clamp(0, (tgt_line.len() - 1) as isize);
+        let new_x = ((cur_tab.cursor_xy.0 as isize) + delta).clamp(0, (tgt_line.len()) as isize);
         cur_tab.cursor_xy.0 = new_x as usize;
     }
 
@@ -234,7 +249,16 @@ impl App {
         let line_y = cur_tab.cursor_xy.1.clamp(0, cur_tab.buf.len());
         let x = cur_tab.cursor_xy.0.clamp(0, cur_tab.buf[line_y].len());
 
-        cur_tab.buf[line_y].insert(x, ch);
+        let x_char = cur_tab
+            .cursor_xy
+            .0
+            .clamp(0, cur_tab.buf[line_y].chars().count());
+        let x_byte = cur_tab.buf[line_y]
+            .char_indices()
+            .nth(x_char)
+            .map(|(i, _)| i)
+            .unwrap_or(cur_tab.buf[line_y].len()); // for non-ascii
+        cur_tab.buf[line_y].insert(x_byte, ch);
         cur_tab.cursor_xy.0 += 1;
         cur_tab.changed = true;
     }
@@ -257,18 +281,21 @@ impl App {
     fn tab_backspace(&mut self) {
         let cur_tab: &mut Tab = &mut self.tabs[self.cur_tab];
         let line_y = cur_tab.cursor_xy.1.clamp(0, cur_tab.buf.len());
-        let x = cur_tab.cursor_xy.0.clamp(0, cur_tab.buf[line_y].len());
+        let x_char = cur_tab
+            .cursor_xy
+            .0
+            .clamp(0, cur_tab.buf[line_y].chars().count());
         let mut tgt_line = &mut cur_tab.buf[line_y];
 
         let (before, after) = cur_tab.buf.split_at_mut(cur_tab.cursor_xy.1 as usize);
         tgt_line = after.get_mut(0).expect("can't get cur line!");
 
-        if (cur_tab.cursor_xy.0 == 0) {
-            if (cur_tab.cursor_xy.1 == 0) {
+        if cur_tab.cursor_xy.0 == 0 {
+            if cur_tab.cursor_xy.1 == 0 {
                 return;
             }
             let prev_line = before.last_mut().expect("can't get prev line");
-            cur_tab.cursor_xy.0 = prev_line.len() - 1;
+            cur_tab.cursor_xy.0 = prev_line.chars().count();
             prev_line.push_str(tgt_line);
             cur_tab.buf.remove(cur_tab.cursor_xy.1 as usize);
             cur_tab.cursor_xy.1 -= 1;
@@ -276,12 +303,19 @@ impl App {
             return;
         }
 
-        match x {
+        match x_char {
             0 => {}
             _ => {
-                cur_tab.buf[line_y].remove(x.saturating_sub(1));
-                cur_tab.changed = true;
-                cur_tab.cursor_xy.0 = cur_tab.cursor_xy.0.saturating_sub(1);
+                // Получаем байтовый индекс символа слева от курсора
+                if let Some(idx) = cur_tab.buf[line_y]
+                    .char_indices()
+                    .nth(x_char - 1)
+                    .map(|(i, _)| i)
+                {
+                    cur_tab.buf[line_y].remove(idx);
+                    cur_tab.cursor_xy.0 -= 1;
+                    cur_tab.changed = true;
+                }
             }
         }
     }
