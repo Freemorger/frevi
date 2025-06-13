@@ -1,13 +1,8 @@
-use std::{
-    clone,
-    collections::HashMap,
-    fs::File,
-    io::{BufRead, BufReader, Write},
-    process::Command,
-};
+use std::{clone, collections::HashMap};
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEventKind};
 
+use crate::commands;
 use crate::tabs::Tab;
 
 #[derive(Debug, Clone)]
@@ -18,10 +13,13 @@ pub struct App {
     pub cursor_pos_xy: (u16, u16),
     pub command_buf: String,
     pub commands: HashMap<String, Operation>,
+    pub aliases: HashMap<String, Vec<String>>,
+    pub command_hist: Vec<Vec<String>>,
     pub status_message: bool,
     pub tabs: Vec<Tab>,
     pub cur_tab: usize,
     pub version: String,
+    pub hist_ctr: usize,
 }
 type Operation = fn(&mut App, Vec<String>);
 
@@ -37,6 +35,9 @@ impl App {
         let tabsv: Vec<Tab> = vec![Tab::new(None)];
         let curtab: usize = 0;
         let vers: &str = env!("CARGO_PKG_VERSION");
+        let com_aliases: HashMap<String, Vec<String>> = HashMap::new();
+        let com_hist: Vec<Vec<String>> = Vec::new();
+        let hist_c: usize = 0;
 
         let mut app = App {
             insert_mode: ins_mod,
@@ -49,6 +50,9 @@ impl App {
             tabs: tabsv,
             cur_tab: curtab,
             version: vers.to_string(),
+            command_hist: com_hist,
+            aliases: com_aliases,
+            hist_ctr: hist_c,
         };
         app.gen_hashmap_com();
         app
@@ -95,6 +99,11 @@ impl App {
                     }
 
                     self.insert_ch_tab_buf(ch);
+                }
+                KeyCode::Tab => {
+                    if (self.insert_mode) {
+                        self.insert_ch_tab_buf('\t');
+                    }
                 }
                 KeyCode::Backspace => {
                     let tgt_line: &mut String;
@@ -155,9 +164,33 @@ impl App {
                     self.cursor_pos_xy.0 += 1;
                 }
                 KeyCode::Up => {
+                    if !self.insert_mode {
+                        self.hist_ctr = self.hist_ctr.saturating_sub(1);
+                        if !self.command_hist.is_empty() {
+                            if let Some(s) = self.command_hist.get(self.hist_ctr.saturating_sub(1))
+                            {
+                                self.command_buf = s.join(" ");
+                            }
+                        }
+                        return;
+                    }
                     self.move_cursor_vert(-1);
                 }
                 KeyCode::Down => {
+                    if !self.insert_mode {
+                        self.hist_ctr = self
+                            .hist_ctr
+                            .saturating_add(1)
+                            .clamp(0, self.command_hist.len() + 1);
+                        if (self.hist_ctr >= self.command_hist.len()) {
+                            self.command_buf = "".to_string();
+                            return;
+                        }
+                        if let Some(s) = self.command_hist.get(self.hist_ctr.saturating_add(1)) {
+                            self.command_buf = s.join(" ");
+                        }
+                        return;
+                    }
                     self.move_cursor_vert(1);
                 }
                 KeyCode::Enter => {
@@ -246,7 +279,7 @@ impl App {
 
     fn insert_ch_tab_buf(&mut self, ch: char) {
         let cur_tab: &mut Tab = &mut self.tabs[self.cur_tab];
-        let line_y = cur_tab.cursor_xy.1.clamp(0, cur_tab.buf.len());
+        let line_y = (cur_tab.scroll_offset + cur_tab.cursor_xy.1).clamp(0, cur_tab.buf.len());
         let x = cur_tab.cursor_xy.0.clamp(0, cur_tab.buf[line_y].len());
 
         let x_char = cur_tab
@@ -266,21 +299,29 @@ impl App {
     fn tab_newline(&mut self) {
         let cur_tab: &mut Tab = &mut self.tabs[self.cur_tab];
         let line_y = cur_tab.cursor_xy.1.clamp(0, cur_tab.buf.len());
-        let x = cur_tab.cursor_xy.0.clamp(0, cur_tab.buf[line_y].len());
-        let tgt_str = &mut cur_tab.buf[line_y];
+        let line = &mut cur_tab.buf[line_y];
 
-        let to_move: String = tgt_str[(x as usize)..].to_string();
-        tgt_str.truncate(x as usize);
+        // Clamp the cursor x to the number of chars, not bytes
+        let x_chars = cur_tab.cursor_xy.0.clamp(0, line.chars().count());
+
+        // byte offset
+        let byte_index = line
+            .char_indices()
+            .nth(x_chars)
+            .map(|(i, _)| i)
+            .unwrap_or_else(|| line.len());
+
+        let to_move: String = line[byte_index..].to_string();
+        line.truncate(byte_index);
         cur_tab.buf.insert(line_y + 1, to_move);
         cur_tab.cursor_xy.0 = 0;
         cur_tab.cursor_xy.1 = line_y + 1;
         cur_tab.changed = true;
-        return;
     }
 
     fn tab_backspace(&mut self) {
         let cur_tab: &mut Tab = &mut self.tabs[self.cur_tab];
-        let line_y = cur_tab.cursor_xy.1.clamp(0, cur_tab.buf.len());
+        let line_y = (cur_tab.scroll_offset + cur_tab.cursor_xy.1).clamp(0, cur_tab.buf.len());
         let x_char = cur_tab
             .cursor_xy
             .0
@@ -331,12 +372,29 @@ impl App {
             return;
         }
 
+        self.command_hist.push(lexems.clone());
+        self.hist_ctr = self.command_hist.len();
         let command = &lexems.clone()[0];
-        let args = lexems.into_iter().skip(1).collect();
 
-        match self.commands.get(command) {
-            Some(f) => f(self, args),
-            None => self.throw_status_message("ERR: No such command".to_string()),
+        let mut res_com: &String = &command.clone();
+        let mut res_args: Vec<String> = Vec::new();
+        match self.aliases.get(command) {
+            Some(cv) => {
+                if (!cv.is_empty()) {
+                    res_com = &cv[0];
+                    res_args = cv[1..].to_vec();
+                }
+            }
+            None => {}
+        }
+        let mut args: Vec<String> = lexems.into_iter().skip(1).collect();
+        res_args.append(&mut args);
+
+        match self.commands.get(res_com) {
+            Some(f) => f(self, res_args),
+            None => {
+                self.throw_status_message("ERR: No such command".to_string());
+            }
         };
     }
 
@@ -346,395 +404,25 @@ impl App {
     }
 
     fn gen_hashmap_com(&mut self) {
-        self.commands.insert("!hi".to_string(), App::com_hi);
-        self.commands.insert("!w".to_string(), App::com_w);
-        self.commands.insert("!r".to_string(), App::com_r);
-        self.commands.insert("!ri".to_string(), App::com_ri);
-        self.commands.insert("!q".to_string(), App::com_q);
-        self.commands.insert("!exec".to_string(), App::com_exec);
-        self.commands.insert("!execn".to_string(), App::com_execn);
-        self.commands.insert("!exec_f".to_string(), App::com_exec_f);
+        self.commands.insert("!hi".to_string(), commands::com_hi);
+        self.commands.insert("!w".to_string(), commands::com_w);
+        self.commands.insert("!r".to_string(), commands::com_r);
+        self.commands.insert("!ri".to_string(), commands::com_ri);
+        self.commands.insert("!q".to_string(), commands::com_q);
         self.commands
-            .insert("!execn_f".to_string(), App::com_execn_f);
-        self.commands.insert("!tab".to_string(), App::com_tab);
+            .insert("!exec".to_string(), commands::com_exec);
         self.commands
-            .insert("!version".to_string(), App::com_version);
-        self.commands.insert("!qi".to_string(), App::com_qi);
-        self.commands.insert("!rn".to_string(), App::com_rn);
-    }
-
-    fn com_hi(&mut self, args: Vec<String>) {
-        self.throw_status_message("Hello!".to_string());
-        return;
-    }
-
-    fn com_w(&mut self, args: Vec<String>) {
-        let curtab = &mut self.tabs[self.cur_tab];
-        let mut file_out_name: String = String::new();
-        if (!args.is_empty()) {
-            file_out_name = args[0].clone();
-        } else if (!curtab.filename.is_empty()) {
-            file_out_name = curtab.filename.clone();
-        } else {
-            self.throw_status_message("Usage: !w filename".to_string());
-            return;
-        }
-
-        let mut file_out: File = match File::create(file_out_name.clone()) {
-            Ok(f) => f,
-            Err(e) => {
-                self.throw_status_message(e.to_string());
-                return;
-            }
-        };
-
-        curtab.filename = file_out_name;
-        curtab.changed = false;
-        let mut contents: String = curtab.buf.join("\n");
-        contents.push('\n');
-        match file_out.write_all(contents.as_bytes()) {
-            Ok(_) => self.throw_status_message("Success".to_string()),
-            Err(e) => {
-                curtab.changed = true;
-                self.throw_status_message(e.to_string());
-            }
-        };
-    }
-
-    fn com_r(&mut self, args: Vec<String>) {
-        let curtab = &mut self.tabs[self.cur_tab];
-        if (curtab.changed) {
-            self.throw_status_message("W: Current buffer isn't saved. !ri to ignore".to_string());
-            return;
-        }
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !r filename".to_string());
-            return;
-        }
-
-        let file_in: File = match File::open(args[0].clone()) {
-            Ok(f) => f,
-            Err(e) => {
-                self.throw_status_message(e.to_string());
-                return;
-            }
-        };
-
-        curtab.buf.clear();
-        let reader = BufReader::new(file_in);
-        for line in reader.lines() {
-            match line {
-                Ok(l) => {
-                    let res = l.clone().replace('\n', "");
-                    curtab.buf.push(res);
-                }
-                Err(e) => {
-                    curtab.buf.clear();
-                    self.throw_status_message(e.to_string());
-                    return;
-                }
-            }
-        }
-        curtab.changed = false;
-        curtab.cursor_xy = (0, 0);
-        curtab.filename = args[0].clone();
-        self.throw_status_message("Success".to_string());
-        return;
-    }
-
-    fn com_ri(&mut self, args: Vec<String>) {
-        let curtab = &mut self.tabs[self.cur_tab];
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !r filename".to_string());
-            return;
-        }
-
-        let file_in: File = match File::open(args[0].clone()) {
-            Ok(f) => f,
-            Err(e) => {
-                self.throw_status_message(e.to_string());
-                return;
-            }
-        };
-
-        curtab.buf.clear();
-        let reader = BufReader::new(file_in);
-        for line in reader.lines() {
-            match line {
-                Ok(l) => {
-                    let res = l.clone().replace('\n', "");
-                    curtab.buf.push(res);
-                }
-                Err(e) => {
-                    curtab.buf.clear();
-                    self.throw_status_message(e.to_string());
-                    return;
-                }
-            }
-        }
-        curtab.changed = false;
-        curtab.cursor_xy = (0, 0);
-        curtab.filename = args[0].clone();
-        self.throw_status_message("Success".to_string());
-        return;
-    }
-
-    fn com_rn(&mut self, args: Vec<String>) {
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !rn filename".to_string());
-            return;
-        }
-        let filename = args[0].clone();
-        let mut newtab = Tab::new(Some(filename.clone()));
-
-        match newtab.readf(filename.clone()) {
-            Ok(()) => {}
-            Err(e) => {
-                self.throw_status_message(e.to_string());
-                return;
-            }
-        }
-        newtab.filename = filename;
-        self.tabs.push(newtab);
-        self.cur_tab = self.tabs.len().saturating_sub(1);
-        self.throw_status_message("Success".to_string());
-        return;
-    }
-
-    fn com_q(&mut self, args: Vec<String>) {
-        let curtab = &self.tabs[self.cur_tab];
-        if (curtab.changed) {
-            self.throw_status_message(
-                "W: Current buffer has unsaved changes; !qi to ignore".to_string(),
-            );
-            return;
-        }
-        self.running = false;
-    }
-
-    fn com_qi(&mut self, args: Vec<String>) {
-        self.running = false;
-    }
-
-    fn com_exec(&mut self, args: Vec<String>) {
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !exec command".to_string());
-            return;
-        }
-        let com = if cfg!(target_os = "windows") {
-            let argline: &str = &args.join(" ");
-            Command::new("cmd")
-                .args(&["/C", &argline])
-                .output()
-                .expect("Error creating cmd")
-        } else {
-            let argline: &str = &args.join(" ");
-            Command::new("sh")
-                .args(&["-c", argline])
-                .output()
-                .expect("Error running sh")
-        };
-
-        let mut output_s: String = String::new();
-        if (com.stdout.is_empty()) {
-            output_s = String::from_utf8_lossy(&com.stderr).to_string();
-        } else {
-            output_s = String::from_utf8_lossy(&com.stdout).to_string();
-        }
-        self.throw_status_message(output_s);
-    }
-
-    fn com_exec_f(&mut self, args: Vec<String>) {
-        // executes shell/cmd script from file (current or specified)
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !exec_f filename".to_string());
-            return;
-        }
-
-        let com = if cfg!(target_os = "windows") {
-            Command::new("cmd")
-                .args(args)
-                .output()
-                .expect("Error creating cmd")
-        } else {
-            Command::new("sh")
-                .args(args)
-                .output()
-                .expect("Error running sh")
-        };
-
-        let mut output_s: String = String::new();
-        if (com.stdout.is_empty()) {
-            output_s = String::from_utf8_lossy(&com.stderr).to_string();
-        } else {
-            output_s = String::from_utf8_lossy(&com.stdout).to_string();
-        }
-        self.throw_status_message(output_s);
-    }
-
-    fn com_execn(&mut self, args: Vec<String>) {
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !execn command".to_string());
-            return;
-        }
-        let com = if cfg!(target_os = "windows") {
-            let argline: &str = &args.join(" ");
-            Command::new("cmd")
-                .args(&["/C", &argline])
-                .output()
-                .expect("Error creating cmd")
-        } else {
-            let argline: &str = &args.join(" ");
-            Command::new("sh")
-                .args(&["-c", argline])
-                .output()
-                .expect("Error running sh")
-        };
-
-        let mut output_s: String = String::new();
-        if (com.stdout.is_empty()) {
-            output_s = String::from_utf8_lossy(&com.stderr).to_string();
-        } else {
-            output_s = String::from_utf8_lossy(&com.stdout).to_string();
-        }
-        let mut output_tab = Tab::new(Some("Output".to_string()));
-        let lines: Vec<String> = output_s.lines().map(|line| line.to_string()).collect();
-        output_tab.buf = lines;
-        self.tabs.push(output_tab);
-        self.cur_tab = self.tabs.len().saturating_sub(1);
-
-        self.throw_status_message("Success".to_string());
-        return;
-    }
-
-    fn com_execn_f(&mut self, args: Vec<String>) {
-        if (args.is_empty()) {
-            self.throw_status_message("Usage: !execn command".to_string());
-            return;
-        }
-        let com = if cfg!(target_os = "windows") {
-            Command::new("cmd")
-                .args(args)
-                .output()
-                .expect("Error creating cmd")
-        } else {
-            Command::new("sh")
-                .args(args)
-                .output()
-                .expect("Error running sh")
-        };
-
-        let mut output_s: String = String::new();
-        if (com.stdout.is_empty()) {
-            output_s = String::from_utf8_lossy(&com.stderr).to_string();
-        } else {
-            output_s = String::from_utf8_lossy(&com.stdout).to_string();
-        }
-        let mut output_tab = Tab::new(Some("Output".to_string()));
-        let lines: Vec<String> = output_s.lines().map(|line| line.to_string()).collect();
-        output_tab.buf = lines;
-        self.tabs.push(output_tab);
-        self.cur_tab = self.tabs.len().saturating_sub(1);
-
-        self.throw_status_message("Success".to_string());
-        return;
-    }
-
-    fn com_tab(&mut self, args: Vec<String>) {
-        if (args.is_empty()) {
-            self.throw_status_message(
-                "Usage: !tab new, !tab goto num, !tab rm num, !tab next, !tab prev, !tab rename num name".to_string(),
-            );
-            return;
-        }
-        if (args[0] == "new") {
-            self.tabs.push(Tab::new(None));
-            self.throw_status_message("Success".to_string());
-            return;
-        }
-        if (args[0] == "goto") {
-            let ind: usize = match args[1].parse() {
-                Ok(n) => n,
-                Err(e) => {
-                    self.throw_status_message(e.to_string());
-                    return;
-                }
-            };
-            if (ind > self.tabs.len()) {
-                self.throw_status_message("Tab with specified indice not opened".to_string());
-                return;
-            }
-            self.cur_tab = ind.saturating_sub(1);
-            self.throw_status_message("Success".to_string());
-            return;
-        }
-        if (args[0] == "rm") {
-            let mut ind: usize = match args[1].parse() {
-                Ok(n) => n,
-                Err(e) => {
-                    self.throw_status_message(e.to_string());
-                    return;
-                }
-            };
-            ind = ind.saturating_sub(1);
-            if (ind >= self.tabs.len()) {
-                self.throw_status_message("Tab with specified indice not opened".to_string());
-                return;
-            }
-            self.tabs.remove(ind);
-            if (self.tabs.len() == 0) {
-                let newtab = Tab::new(None);
-                self.tabs.push(newtab);
-                self.cur_tab = 0;
-            } else if (self.cur_tab >= self.tabs.len()) {
-                self.cur_tab = self.cur_tab.saturating_sub(1);
-            }
-            self.throw_status_message("Success".to_string());
-            return;
-        }
-        if (args[0] == "next") {
-            if (self.cur_tab + 1 >= self.tabs.len()) {
-                self.throw_status_message("Current tab is already last!".to_string());
-                return;
-            }
-            self.cur_tab += 1;
-            self.throw_status_message("Success".to_string());
-            return;
-        }
-        if (args[0] == "prev") {
-            if (self.cur_tab == 0) {
-                self.throw_status_message("Current tab is first!".to_string());
-                return;
-            }
-            self.cur_tab -= 1;
-            self.throw_status_message("Success".to_string());
-            return;
-        }
-        if (args[0] == "rename") {
-            let ind: usize = match args[1].parse() {
-                Ok(n) => n,
-                Err(e) => {
-                    self.throw_status_message(e.to_string());
-                    return;
-                }
-            };
-            if (ind > self.tabs.len()) {
-                self.throw_status_message("Tab with specified indice not opened".to_string());
-                return;
-            }
-            let new_name: String = args[2..].join(" ");
-            self.tabs[ind.saturating_sub(1)].displayed_name = new_name;
-            self.throw_status_message("Success".to_string());
-            return;
-        }
-        self.throw_status_message(
-            "Usage: !tab new, !tab goto num, !tab rm num, !tab next, !tab prev, !tab rename num name".to_string(),
-        );
-        return;
-    }
-
-    fn com_version(&mut self, args: Vec<String>) {
-        self.throw_status_message(self.version.clone());
-        return;
+            .insert("!execn".to_string(), commands::com_execn);
+        self.commands
+            .insert("!exec_f".to_string(), commands::com_exec_f);
+        self.commands
+            .insert("!execn_f".to_string(), commands::com_execn_f);
+        self.commands.insert("!tab".to_string(), commands::com_tab);
+        self.commands
+            .insert("!version".to_string(), commands::com_version);
+        self.commands.insert("!qi".to_string(), commands::com_qi);
+        self.commands.insert("!rn".to_string(), commands::com_rn);
+        self.commands
+            .insert("!alias".to_string(), commands::com_alias);
     }
 }

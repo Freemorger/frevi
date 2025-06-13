@@ -1,4 +1,5 @@
 mod app;
+mod commands;
 mod tabs;
 use crate::app::App;
 use crossterm::event::{self, Event};

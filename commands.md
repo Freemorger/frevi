@@ -20,6 +20,9 @@ A guide to default editor commands.
 | [!tab next](#tab-next)       | Opens the next tab                                                 | -                     |
 | [!tab prev](#tab-prev)       | Opens the previous tab                                             | -                     |
 | [!tab rename](#tab-rename)   | Renames the specified tab                                          | [num] [new name]      |
+| [!alias](#alias)             | Aliases manager                                                    | -                     |
+| [!alias new](#alias-new)      | Creates new alias                                                 | [alias_name] [com]      |
+| [!alias rm](#alias-rm)        | Removes existing alias                                            | [alias_name]          |
 
 
 ## !hi
@@ -60,6 +63,7 @@ By default, command will be executed in:
 sh (unix-like os)
 cmd (windows)
 Prints stdout output into new tab.
+Pass ~cur as first argument in order to print result into current tab instead new one.
 Args: command
 ## !exec_f
 Executes the script/executable file.
@@ -74,6 +78,7 @@ By default, file will be executed in:
 sh (unix-like os)
 cmd (windows)
 Prints stdout output into new tab.
+Pass ~cur as first argument in order to print result into current tab instead new one.
 Args: filename
 ## !version
 Prints current editor version into status bar
@@ -99,3 +104,11 @@ Args: -
 ### !tab rename
 Renames specified tab.
 Args: [num] [new name]
+## !alias
+Editor commands aliases manager.
+### !alias new
+Creates new alias.
+Args: alias_name command com_args(optional)
+### !alias rm
+Removes saved alias.
+Args: alias_name

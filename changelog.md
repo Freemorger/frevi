@@ -1,5 +1,11 @@
-## CHANGELOG v2.2
-- Open new tab using f2..f12 (will be pushed at end of tab list)
-- little cleanup
-- non-ascii symbols fix
-- open file from cli args
+## CHANGELOG v3
+- scroll editing bug fixed
+- command aliases
+- default commands extracted to src/commands.rs
+- command history
+- execn same tab (see commands.md for more info)
+- tab btn
+## TODO
+- visual mode
+- split
+- edit history
