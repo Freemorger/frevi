@@ -347,7 +347,7 @@ impl App {
         match x_char {
             0 => {}
             _ => {
-                // Получаем байтовый индекс символа слева от курсора
+                // getting byte index
                 if let Some(idx) = cur_tab.buf[line_y]
                     .char_indices()
                     .nth(x_char - 1)
