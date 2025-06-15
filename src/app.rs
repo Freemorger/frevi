@@ -1,6 +1,6 @@
-use std::{clone, collections::HashMap};
+use std::collections::HashMap;
 
-use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 
 use crate::commands;
 use crate::tabs::Tab;
@@ -10,6 +10,8 @@ pub struct App {
     pub insert_mode: bool,
     pub running: bool,
     pub left_area_open: bool,
+    pub left_area_used: bool,
+    pub left_area: Tab,
     pub cursor_pos_xy: (u16, u16),
     pub command_buf: String,
     pub commands: HashMap<String, Operation>,
@@ -38,11 +40,14 @@ impl App {
         let com_aliases: HashMap<String, Vec<String>> = HashMap::new();
         let com_hist: Vec<Vec<String>> = Vec::new();
         let hist_c: usize = 0;
+        let left_area: Tab = Tab::new(None);
+        let left_ar_us: bool = false;
 
         let mut app = App {
             insert_mode: ins_mod,
             running: run,
             left_area_open: left_open,
+            left_area: left_area,
             cursor_pos_xy: cpos_xy,
             command_buf: com_buf,
             commands: coms,
@@ -53,6 +58,7 @@ impl App {
             command_hist: com_hist,
             aliases: com_aliases,
             hist_ctr: hist_c,
+            left_area_used: left_ar_us,
         };
         app.gen_hashmap_com();
         app
@@ -65,15 +71,15 @@ impl App {
                     self.insert_mode = !self.insert_mode;
                 }
                 KeyCode::Char(ch) => {
-                    if (!self.insert_mode) {
-                        if (self.status_message) {
+                    if !self.insert_mode {
+                        if self.status_message {
                             self.command_buf = "".to_string();
                             self.command_buf.push(ch);
                             self.cursor_pos_xy.0 = 1;
                             self.status_message = !self.status_message;
                             return;
                         }
-                        if (self.cursor_pos_xy.0 as usize >= self.command_buf.len()) {
+                        if self.cursor_pos_xy.0 as usize >= self.command_buf.len() {
                             match self.command_buf.len() {
                                 0 => {
                                     self.cursor_pos_xy.0 = 0;
@@ -101,7 +107,7 @@ impl App {
                     self.insert_ch_tab_buf(ch);
                 }
                 KeyCode::Tab => {
-                    if (self.insert_mode) {
+                    if self.insert_mode {
                         self.insert_ch_tab_buf('\t');
                     }
                 }
@@ -140,25 +146,25 @@ impl App {
                     }
                 }
                 KeyCode::Left => {
-                    if (self.insert_mode) {
+                    if self.insert_mode {
                         self.move_cursor_hor(-1);
                         return;
                     }
-                    if (self.cursor_pos_xy.0 == 0) {
+                    if self.cursor_pos_xy.0 == 0 {
                         return;
                     }
                     self.cursor_pos_xy.0 -= 1;
                 }
                 KeyCode::Right => {
                     let tgt_str: &mut String;
-                    if (!self.insert_mode) {
+                    if !self.insert_mode {
                         tgt_str = &mut self.command_buf;
                     } else {
                         self.move_cursor_hor(1);
                         return;
                     }
 
-                    if (self.cursor_pos_xy.0 as usize >= tgt_str.len()) {
+                    if self.cursor_pos_xy.0 as usize >= tgt_str.len() {
                         return;
                     }
                     self.cursor_pos_xy.0 += 1;
@@ -170,6 +176,7 @@ impl App {
                             if let Some(s) = self.command_hist.get(self.hist_ctr.saturating_sub(1))
                             {
                                 self.command_buf = s.join(" ");
+                                self.status_message = false;
                             }
                         }
                         return;
@@ -182,7 +189,7 @@ impl App {
                             .hist_ctr
                             .saturating_add(1)
                             .clamp(0, self.command_hist.len() + 1);
-                        if (self.hist_ctr >= self.command_hist.len()) {
+                        if self.hist_ctr >= self.command_hist.len() {
                             self.command_buf = "".to_string();
                             return;
                         }
@@ -194,7 +201,7 @@ impl App {
                     self.move_cursor_vert(1);
                 }
                 KeyCode::Enter => {
-                    if (!self.insert_mode) {
+                    if !self.insert_mode {
                         self.parse_command();
                         return;
                     }
@@ -214,7 +221,7 @@ impl App {
                     self.tab_update_scroll(usize::MAX); // this will work due to clamp inside function.
                 }
                 KeyCode::F(num) => {
-                    if (num as usize > self.tabs.len()) {
+                    if num as usize > self.tabs.len() {
                         let newtab = Tab::new(None);
                         self.tabs.push(newtab);
                         self.cur_tab = self.tabs.len().saturating_sub(1);
@@ -278,7 +285,10 @@ impl App {
     }
 
     fn insert_ch_tab_buf(&mut self, ch: char) {
-        let cur_tab: &mut Tab = &mut self.tabs[self.cur_tab];
+        let cur_tab: &mut Tab = match self.left_area_used {
+            true => &mut self.left_area,
+            false => &mut self.tabs[self.cur_tab],
+        };
         let line_y = (cur_tab.scroll_offset + cur_tab.cursor_xy.1).clamp(0, cur_tab.buf.len());
         let x = cur_tab.cursor_xy.0.clamp(0, cur_tab.buf[line_y].len());
 
@@ -367,7 +377,7 @@ impl App {
             .split_whitespace()
             .map(String::from)
             .collect();
-        if (lexems.is_empty()) {
+        if lexems.is_empty() {
             self.throw_status_message("ERR: Command buffer is empty".to_string());
             return;
         }
@@ -380,7 +390,7 @@ impl App {
         let mut res_args: Vec<String> = Vec::new();
         match self.aliases.get(command) {
             Some(cv) => {
-                if (!cv.is_empty()) {
+                if !cv.is_empty() {
                     res_com = &cv[0];
                     res_args = cv[1..].to_vec();
                 }

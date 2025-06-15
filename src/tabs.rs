@@ -1,9 +1,8 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader, Error},
+    io::{BufRead, BufReader},
 };
 
-use crate::app::App;
 
 #[derive(Debug, Clone)]
 pub struct Tab {
@@ -39,7 +38,7 @@ impl Tab {
     // Reads file into tab
     pub fn readf(&mut self, filename: String) -> Result<(), std::io::Error> {
         self.filename = filename.clone();
-        let mut file: File = match File::open(filename) {
+        let file: File = match File::open(filename) {
             Ok(f) => f,
             Err(e) => return Err(e),
         };

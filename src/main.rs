@@ -1,19 +1,19 @@
 mod app;
 mod commands;
+mod edits;
 mod tabs;
 use crate::app::App;
-use crossterm::event::{self, Event};
+use crossterm::event::{self};
 use ratatui::{
     self, Frame,
-    crossterm::terminal,
     layout::{
-        Constraint::{self, Fill, Length, Min},
+        Constraint::{Fill, Length, Min},
         Layout, Position,
     },
     prelude::Stylize,
     style::{Color, Style},
-    text::{Line, Text},
-    widgets::{Block, Borders, Paragraph, Tabs, Widget},
+    text::Text,
+    widgets::{Block, Borders, Paragraph, Tabs},
 };
 
 fn main() {
@@ -33,7 +33,7 @@ fn main() {
     };
 
     let mut terminal = ratatui::init();
-    while (app.running) {
+    while app.running {
         terminal
             .draw(|f| draw(f, &app))
             .expect("failed to render frame");
@@ -48,14 +48,14 @@ fn draw(frame: &mut Frame, app: &App) {
 
     let mut vert_length: u16 = 2;
     let stat_length: u16 = 1;
-    if (!curtab.filename.is_empty()) {
+    if !curtab.filename.is_empty() {
         vert_length = 3;
     }
 
     let vertical = Layout::vertical([Length(vert_length), Min(0), Length(stat_length)]);
     let [title_area, main_area, status_area] = vertical.areas(frame.area());
     let (left_area, right_area);
-    if (app.left_area_open) {
+    if app.left_area_open {
         let horizontal = Layout::horizontal([Fill(1); 2]);
         let [l, r] = horizontal.areas(main_area);
         left_area = Some(l);
@@ -76,6 +76,7 @@ fn draw(frame: &mut Frame, app: &App) {
     .style(Style::default())
     .highlight_style(Style::default().fg(Color::LightCyan).bold())
     .divider("|");
+
     let title_text = match curtab.changed {
         true => curtab.filename.clone() + " *",
         false => curtab.filename.clone(),
@@ -106,9 +107,28 @@ fn draw(frame: &mut Frame, app: &App) {
         .alignment(ratatui::layout::Alignment::Left);
     frame.render_widget(paragraph, right_area);
 
+    if (app.left_area_open) {
+        let left_tab = &app.left_area;
+        let buf_len_left = left_tab.buf.len();
+        let start_line_left = left_tab.scroll_offset.min(buf_len_left);
+        let end_line_left = (left_tab.scroll_offset + available_length as usize).min(buf_len_left);
+
+        let visible_text_left = curtab.buf[start_line_left..end_line_left]
+            .iter()
+            .enumerate()
+            .map(|(i, line)| format!("{}: {}", i + start_line + 1, line))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let paragraph_left = Paragraph::new(visible_text_left)
+            .wrap(ratatui::widgets::Wrap { trim: true })
+            .alignment(ratatui::layout::Alignment::Left);
+        frame.render_widget(paragraph_left, left_area.unwrap());
+    }
+
     let mut status_str = app.command_buf.clone();
 
-    if (app.insert_mode) {
+    if app.insert_mode {
         status_str.push_str("\t -- INSERT -- \t");
 
         let digits_ctr =
@@ -117,7 +137,7 @@ fn draw(frame: &mut Frame, app: &App) {
             right_area.x + (curtab.cursor_xy.0 as u16) + 2 + digits_ctr, //adding y for line counter
             right_area.y + curtab.cursor_xy.1 as u16,
         ));
-    } else if (!app.command_buf.is_empty()) {
+    } else if !app.command_buf.is_empty() {
         frame.set_cursor_position(Position::new(
             status_area.x + app.cursor_pos_xy.0,
             status_area.y,
