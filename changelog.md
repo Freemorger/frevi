@@ -9,7 +9,8 @@ pre2:
 - command hist bug fix
 - unsaved buf warning on execn_f cur
 - left area wip
-- edits wip
-## TODO
-- visual mode
-- split
+pre3:
+- edits are messy thing. maybe in some future update.
+- mouse wheel scroll finally works!
+- pageup/pagedown will now by default move scroll by 10 units
+- minor refactoring in !tab command handler function

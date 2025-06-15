@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 
-use crossterm::event::{Event, KeyCode, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind};
+use crossterm::terminal::{ScrollDown, ScrollUp};
 
 use crate::commands;
+use crate::edits::Edit;
 use crate::tabs::Tab;
 
 #[derive(Debug, Clone)]
@@ -66,6 +68,39 @@ impl App {
 
     pub fn handle_input(&mut self, event: Event) {
         match event {
+            Event::Mouse(m_ev) => match m_ev.kind {
+                MouseEventKind::ScrollUp => {
+                    let cur_tab_opt = self.tabs.get_mut(self.cur_tab);
+                    let cur_tab = match cur_tab_opt {
+                        Some(tab) => tab,
+                        None => {
+                            self.throw_status_message(format!(
+                                "E: Can't get tab with indice {}",
+                                self.cur_tab
+                            ));
+                            return;
+                        }
+                    };
+                    cur_tab.scroll_offset = cur_tab.scroll_offset.saturating_sub(1);
+                    return;
+                }
+                MouseEventKind::ScrollDown => {
+                    let cur_tab_opt = self.tabs.get_mut(self.cur_tab);
+                    let cur_tab = match cur_tab_opt {
+                        Some(tab) => tab,
+                        None => {
+                            self.throw_status_message(format!(
+                                "E: Can't get tab with indice {}",
+                                self.cur_tab
+                            ));
+                            return;
+                        }
+                    };
+                    cur_tab.scroll_offset = cur_tab.scroll_offset.saturating_add(1);
+                    return;
+                }
+                _ => {}
+            },
             Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
                 KeyCode::Insert | KeyCode::Esc => {
                     self.insert_mode = !self.insert_mode;
@@ -209,10 +244,10 @@ impl App {
                     self.tab_newline();
                 }
                 KeyCode::PageUp => {
-                    self.tab_update_scroll_delta(-1);
+                    self.tab_update_scroll_delta(-10);
                 }
                 KeyCode::PageDown => {
-                    self.tab_update_scroll_delta(1);
+                    self.tab_update_scroll_delta(10);
                 }
                 KeyCode::Home => {
                     self.tab_update_scroll(0);
@@ -234,18 +269,6 @@ impl App {
                 }
                 _ => {}
             },
-            // Event::Mouse(m_ev) => match m_ev.kind {
-            //     MouseEventKind::ScrollUp => { // doesn't work in ratatui for some reason...
-            //         if (self.scroll_offset == 0) {
-            //             return;
-            //         }
-            //         self.scroll_offset -= 1;
-            //     }
-            //     MouseEventKind::ScrollDown => {
-            //         self.scroll_offset += 1;
-            //     }
-            //     _ => {}
-            // },
             _ => {}
         }
     }

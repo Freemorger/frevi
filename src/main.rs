@@ -3,9 +3,13 @@ mod commands;
 mod edits;
 mod tabs;
 use crate::app::App;
-use crossterm::event::{self};
+use crossterm::{
+    ExecutableCommand,
+    event::{self, DisableMouseCapture, EnableMouseCapture, read},
+};
 use ratatui::{
     self, Frame,
+    crossterm::execute,
     layout::{
         Constraint::{Fill, Length, Min},
         Layout, Position,
@@ -19,6 +23,14 @@ use ratatui::{
 fn main() {
     let mut app = App::new();
     app.running = true;
+    match std::io::stdout().execute(crossterm::event::EnableMouseCapture) {
+        Ok(_) => {}
+        Err(e) => {
+            app.throw_status_message(
+                "Mouse capture may not be available on this terminal".to_string(),
+            );
+        }
+    }
 
     match std::env::args().nth(1) {
         // opening file from cli
@@ -40,6 +52,7 @@ fn main() {
         let event = event::read().expect("failed to read event");
         app.handle_input(event);
     }
+    std::io::stdout().execute(DisableMouseCapture).unwrap();
     ratatui::restore();
 }
 

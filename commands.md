@@ -104,6 +104,15 @@ Args: -
 ### !tab rename
 Renames specified tab.
 Args: [num] [new name]
+### !tab left
+Toggles left area tab. Expiremental feature.
+Args: -
+### !tab leftuse
+Toggles whether left area tab should be edited in insert mode or not. Expiremental.
+Args: -
+### !tab showdiffn
+Opens last edits in current tab. Currently edit history not really working.
+Args: -
 ## !alias
 Editor commands aliases manager.
 ### !alias new

@@ -347,12 +347,13 @@ pub fn com_tab(app: &mut App, args: Vec<String>) {
         );
         return;
     }
-    if args[0] == "new" {
+    let subcommand = args.get(0);
+    if subcommand == Some(&"new".to_string()) {
         app.tabs.push(Tab::new(None));
         app.throw_status_message("Success".to_string());
         return;
     }
-    if args[0] == "goto" {
+    if subcommand == Some(&"goto".to_string()) {
         let ind: usize = match args[1].parse() {
             Ok(n) => n,
             Err(e) => {
@@ -368,7 +369,7 @@ pub fn com_tab(app: &mut App, args: Vec<String>) {
         app.throw_status_message("Success".to_string());
         return;
     }
-    if args[0] == "rm" {
+    if subcommand == Some(&"rm".to_string()) {
         let mut ind: usize = match args[1].parse() {
             Ok(n) => n,
             Err(e) => {
@@ -392,7 +393,7 @@ pub fn com_tab(app: &mut App, args: Vec<String>) {
         app.throw_status_message("Success".to_string());
         return;
     }
-    if args[0] == "next" {
+    if subcommand == Some(&"next".to_string()) {
         if app.cur_tab + 1 >= app.tabs.len() {
             app.throw_status_message("Current tab is already last!".to_string());
             return;
@@ -401,7 +402,7 @@ pub fn com_tab(app: &mut App, args: Vec<String>) {
         app.throw_status_message("Success".to_string());
         return;
     }
-    if args[0] == "prev" {
+    if subcommand == Some(&"prev".to_string()) {
         if app.cur_tab == 0 {
             app.throw_status_message("Current tab is first!".to_string());
             return;
@@ -410,7 +411,7 @@ pub fn com_tab(app: &mut App, args: Vec<String>) {
         app.throw_status_message("Success".to_string());
         return;
     }
-    if args[0] == "rename" {
+    if subcommand == Some(&"rename".to_string()) {
         let ind: usize = match args[1].parse() {
             Ok(n) => n,
             Err(e) => {
@@ -427,15 +428,38 @@ pub fn com_tab(app: &mut App, args: Vec<String>) {
         app.throw_status_message("Success".to_string());
         return;
     }
-    if args.get(0) == Some(&"left".to_string()) {
+    if subcommand == Some(&"left".to_string()) {
         app.left_area_open = !app.left_area_open;
         app.throw_status_message("success".to_owned());
         return;
     }
-    if args.get(0) == Some(&"leftuse".to_string()) {
+    if subcommand == Some(&"leftuse".to_string()) {
         app.left_area_used = !app.left_area_used;
         app.throw_status_message("success".to_owned());
         return;
+    }
+    if subcommand == Some(&"showdiffn".to_string()) {
+        let cur_tab_opt = app.tabs.get_mut(app.cur_tab);
+        let cur_tab = match cur_tab_opt {
+            Some(tab) => tab,
+            None => {
+                app.throw_status_message("E: No tab opened!".to_string());
+                return;
+            }
+        };
+        match cur_tab.edit_hist.last_mut() {
+            Some(e) => {
+                let res_tab = e.dbg_show_edit();
+                app.tabs.push(res_tab);
+                app.cur_tab = app.tabs.len() - 1;
+                app.throw_status_message("Success".to_string());
+                return;
+            }
+            None => {
+                app.throw_status_message("No edit was made".to_string());
+                return;
+            }
+        }
     }
     app.throw_status_message(
         "Usage: !tab new, !tab goto num, !tab rm num, !tab next, !tab prev, !tab rename num name"

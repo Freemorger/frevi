@@ -1,11 +1,14 @@
 use std::char;
 
+use crate::tabs::Tab;
+
+#[derive(Debug, Clone)]
 pub struct Edit {
     pub start_line: usize,
     pub start_x: usize,
     pub end_line: usize,
     pub end_x: usize,
-    pub diff: Vec<String>,
+    pub diff: Vec<String>, // previous buffer
 }
 
 impl Edit {
@@ -26,9 +29,23 @@ impl Edit {
     }
 
     pub fn edit_at_curs(&mut self, cursor: (usize, usize), ch: char) {
-        let (col, line) = cursor;
-        // something gotta be here
+        let (col_n, line_n) = cursor;
+        let line = &mut self.diff[line_n];
+        let x_chars = col_n.clamp(0, line.chars().count());
+        let byte_index = line
+            .char_indices()
+            .nth(x_chars)
+            .map(|(i, _)| i)
+            .unwrap_or_else(|| line.len());
+
+        // todo once in future here...
     }
 
     pub fn undo_edit(&mut self, buf: &mut Vec<String>) {}
+
+    pub fn dbg_show_edit(&mut self) -> Tab {
+        let mut res: Tab = Tab::new(Some("Debug".to_string()));
+        res.buf = self.diff.clone();
+        res
+    }
 }

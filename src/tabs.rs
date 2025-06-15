@@ -1,8 +1,8 @@
+use crate::edits::Edit;
 use std::{
     fs::File,
     io::{BufRead, BufReader},
 };
-
 
 #[derive(Debug, Clone)]
 pub struct Tab {
@@ -12,6 +12,7 @@ pub struct Tab {
     pub displayed_name: String,
     pub changed: bool,
     pub scroll_offset: usize,
+    pub edit_hist: Vec<Edit>,
 }
 
 impl Tab {
@@ -24,6 +25,7 @@ impl Tab {
         let displayed_n = displayed_name.unwrap_or("New tab".to_string());
         let changes: bool = false;
         let sc_offset: usize = 0;
+        let ed_h: Vec<Edit> = Vec::new();
 
         Tab {
             filename: fname,
@@ -32,6 +34,7 @@ impl Tab {
             displayed_name: displayed_n,
             changed: changes,
             scroll_offset: sc_offset,
+            edit_hist: ed_h,
         }
     }
 
