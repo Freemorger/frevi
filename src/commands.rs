@@ -1,4 +1,8 @@
-use crate::{app::App, tabs::Tab};
+use crate::{
+    app::App,
+    plugin::{LoaderSysState, LuaLoader, PlugLoaders},
+    tabs::Tab,
+};
 use std::{
     fs::File,
     io::{BufRead, BufReader, Write},
@@ -501,6 +505,68 @@ pub fn com_alias(app: &mut App, args: Vec<String>) {
                 app.throw_status_message("No alias with this name was saved".to_string());
                 return;
             }
+        }
+    }
+}
+
+pub fn com_plugin(app: &mut App, args: Vec<String>) {
+    let subcommand = match args.get(0) {
+        Some(st) => st,
+        None => {
+            app.throw_status_message(
+                "Usage: !plugin state, !plugin load, !plugin unload, more in docs".to_string(),
+            );
+            return;
+        }
+    };
+    let cur_loader = &mut app.plugin_subsys;
+    let mut lual: Option<&mut LuaLoader> = None;
+    // add some loaders options here if new
+    match cur_loader {
+        PlugLoaders::LuaL(l) => lual = Some(l),
+        _ => {
+            app.throw_status_message("No supported plugin loader detected!".to_string());
+            return;
+        }
+    }
+    if subcommand == &"state" {
+        if let Some(lualoader) = lual {
+            match lualoader.state {
+                LoaderSysState::Running => {
+                    app.throw_status_message("Running normally".to_string());
+                    return;
+                }
+                LoaderSysState::Disabled => {
+                    app.throw_status_message("Disabled".to_string());
+                    return;
+                }
+                LoaderSysState::Panicked => {
+                    app.throw_status_message("Plugin loader panicked! Check logs".to_string());
+                    return;
+                }
+            }
+        }
+    }
+    if subcommand == &"load" {
+        let plug_path = match args.get(1) {
+            Some(p) => p,
+            None => {
+                app.throw_status_message("Usage: !plugin load path".to_string());
+                return;
+            }
+        };
+        if let Some(lualoader) = lual {
+            match lualoader.load_plug(plug_path.to_string()) {
+                Ok(_) => {}
+                Err(e) => {
+                    app.throw_status_message(e);
+                    return;
+                }
+            }
+            let plugin_name = lualoader.plugins.last().unwrap().name.clone();
+            app.throw_status_message(
+                format!("Plugin {} successfully loaded.", plugin_name).to_string(),
+            );
         }
     }
 }

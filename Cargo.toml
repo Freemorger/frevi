@@ -1,8 +1,9 @@
 [package]
 name = "frevi"
-version = "0.3.0"
+version = "0.4.0-pre1"
 edition = "2024"
 
 [dependencies]
 crossterm = "0.29.0"
+mlua = { version = "0.10.5", features = ["lua54"] }
 ratatui = "0.29.0"

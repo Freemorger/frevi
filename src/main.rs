@@ -1,6 +1,7 @@
 mod app;
 mod commands;
 mod edits;
+mod plugin;
 mod tabs;
 use crate::app::App;
 use crossterm::{

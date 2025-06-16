@@ -5,7 +5,15 @@ use crossterm::terminal::{ScrollDown, ScrollUp};
 
 use crate::commands;
 use crate::edits::Edit;
+use crate::plugin::{LuaLoader, PlugLoaders, PluginLoader};
 use crate::tabs::Tab;
+
+type RustHandler = fn(&mut App, Vec<String>);
+#[derive(Debug, Clone)]
+pub enum CommandHandler {
+    Rust(RustHandler),
+    Lua(),
+}
 
 #[derive(Debug, Clone)]
 pub struct App {
@@ -16,7 +24,7 @@ pub struct App {
     pub left_area: Tab,
     pub cursor_pos_xy: (u16, u16),
     pub command_buf: String,
-    pub commands: HashMap<String, Operation>,
+    pub commands: HashMap<String, CommandHandler>,
     pub aliases: HashMap<String, Vec<String>>,
     pub command_hist: Vec<Vec<String>>,
     pub status_message: bool,
@@ -24,17 +32,18 @@ pub struct App {
     pub cur_tab: usize,
     pub version: String,
     pub hist_ctr: usize,
+    pub plugin_subsys: PlugLoaders,
 }
-type Operation = fn(&mut App, Vec<String>);
 
 impl App {
+    // Creates App object with default plugin system (lualoader)
     pub fn new() -> App {
         let ins_mod: bool = false;
         let run: bool = true;
         let left_open: bool = false;
         let cpos_xy: (u16, u16) = (0, 0);
         let com_buf: String = String::new();
-        let coms: HashMap<String, Operation> = HashMap::new();
+        let coms: HashMap<String, CommandHandler> = HashMap::new();
         let stat_msg: bool = false;
         let tabsv: Vec<Tab> = vec![Tab::new(None)];
         let curtab: usize = 0;
@@ -44,6 +53,8 @@ impl App {
         let hist_c: usize = 0;
         let left_area: Tab = Tab::new(None);
         let left_ar_us: bool = false;
+        let lua_load = LuaLoader::new();
+        let pl_sys: PlugLoaders = PlugLoaders::LuaL(lua_load);
 
         let mut app = App {
             insert_mode: ins_mod,
@@ -61,6 +72,7 @@ impl App {
             aliases: com_aliases,
             hist_ctr: hist_c,
             left_area_used: left_ar_us,
+            plugin_subsys: pl_sys,
         };
         app.gen_hashmap_com();
         app
@@ -424,7 +436,10 @@ impl App {
         res_args.append(&mut args);
 
         match self.commands.get(res_com) {
-            Some(f) => f(self, res_args),
+            Some(handler) => match handler {
+                CommandHandler::Rust(f) => f(self, res_args),
+                CommandHandler::Lua() => {}
+            },
             None => {
                 self.throw_status_message("ERR: No such command".to_string());
             }
@@ -437,25 +452,49 @@ impl App {
     }
 
     fn gen_hashmap_com(&mut self) {
-        self.commands.insert("!hi".to_string(), commands::com_hi);
-        self.commands.insert("!w".to_string(), commands::com_w);
-        self.commands.insert("!r".to_string(), commands::com_r);
-        self.commands.insert("!ri".to_string(), commands::com_ri);
-        self.commands.insert("!q".to_string(), commands::com_q);
         self.commands
-            .insert("!exec".to_string(), commands::com_exec);
+            .insert("!hi".to_string(), CommandHandler::Rust(commands::com_hi));
         self.commands
-            .insert("!execn".to_string(), commands::com_execn);
+            .insert("!w".to_string(), CommandHandler::Rust(commands::com_w));
         self.commands
-            .insert("!exec_f".to_string(), commands::com_exec_f);
+            .insert("!r".to_string(), CommandHandler::Rust(commands::com_r));
         self.commands
-            .insert("!execn_f".to_string(), commands::com_execn_f);
-        self.commands.insert("!tab".to_string(), commands::com_tab);
+            .insert("!ri".to_string(), CommandHandler::Rust(commands::com_ri));
         self.commands
-            .insert("!version".to_string(), commands::com_version);
-        self.commands.insert("!qi".to_string(), commands::com_qi);
-        self.commands.insert("!rn".to_string(), commands::com_rn);
+            .insert("!q".to_string(), CommandHandler::Rust(commands::com_q));
+        self.commands.insert(
+            "!exec".to_string(),
+            CommandHandler::Rust(commands::com_exec),
+        );
+        self.commands.insert(
+            "!execn".to_string(),
+            CommandHandler::Rust(commands::com_execn),
+        );
+        self.commands.insert(
+            "!exec_f".to_string(),
+            CommandHandler::Rust(commands::com_exec_f),
+        );
+        self.commands.insert(
+            "!execn_f".to_string(),
+            CommandHandler::Rust(commands::com_execn_f),
+        );
         self.commands
-            .insert("!alias".to_string(), commands::com_alias);
+            .insert("!tab".to_string(), CommandHandler::Rust(commands::com_tab));
+        self.commands.insert(
+            "!version".to_string(),
+            CommandHandler::Rust(commands::com_version),
+        );
+        self.commands
+            .insert("!qi".to_string(), CommandHandler::Rust(commands::com_qi));
+        self.commands
+            .insert("!rn".to_string(), CommandHandler::Rust(commands::com_rn));
+        self.commands.insert(
+            "!alias".to_string(),
+            CommandHandler::Rust(commands::com_alias),
+        );
+        self.commands.insert(
+            "!plugin".to_string(),
+            CommandHandler::Rust(commands::com_plugin),
+        );
     }
 }
