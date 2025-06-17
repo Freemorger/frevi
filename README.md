@@ -1,5 +1,6 @@
 # A simple Vi-like TUI text editor on Rust.
 Dependencies: ratatui, crossterm latest
+### Note: project will be most likely abandoned. Rust borrowing system makes big codebases unmaintanable.
 ## Current features:
 - Command/insert mode
 - Simple command parses
