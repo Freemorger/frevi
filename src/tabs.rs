@@ -52,4 +52,9 @@ impl Tab {
 
         Ok(())
     }
+
+    pub fn str_into_buf(&mut self, content: String) {
+        let lines: Vec<String> = content.split('\n').map(|s| s.to_string()).collect();
+        self.buf = lines;
+    }
 }

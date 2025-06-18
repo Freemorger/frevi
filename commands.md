@@ -20,9 +20,15 @@ A guide to default editor commands.
 | [!tab next](#tab-next)       | Opens the next tab                                                 | -                     |
 | [!tab prev](#tab-prev)       | Opens the previous tab                                             | -                     |
 | [!tab rename](#tab-rename)   | Renames the specified tab                                          | [num] [new name]      |
-| [!alias](#alias)             | Aliases manager                                                    | -                     |
-| [!alias new](#alias-new)      | Creates new alias                                                 | [alias_name] [com]      |
-| [!alias rm](#alias-rm)        | Removes existing alias                                            | [alias_name]          |
+| [!alias](#alias)             | Aliases manager                                                   | -                     |
+| [!alias new](#alias-new)     | Creates new alias                                                  | [alias_name] [com]    |
+| [!alias rm](#alias-rm)       | Removes existing alias                                             | [alias_name]          |
+| [!plugin](#plugin)           | Plugin manager                                                    | -                     |
+| [!plugin load](#plugin-load) | Loads a plugin from its path                                       | path                  |
+| [!plugin unload](#plugin-unload) | Unloads a plugin by its name                                  | name                  |
+| [!plugin info](#plugin-info) | Displays plugin information in new tab (name, version, author, description) | name          |
+| [!plugin state](#plugin-state)| Displays plugin loader state                                      | -                     |
+
 
 
 ## !hi
@@ -121,3 +127,17 @@ Args: alias_name command com_args(optional)
 ### !alias rm
 Removes saved alias.
 Args: alias_name
+## !plugin
+Plugin manager
+### !plugin load
+Loads a plugin from its path.
+Args: path
+### !plugin unload
+Unloads a plugin by its name.
+Args: name
+### !plugin info
+Displays a plugin information in new tab (name, version, author, description).
+Args: name
+### !plugin state
+Displays plugin loader state.
+Args: -

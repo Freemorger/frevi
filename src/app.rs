@@ -1,12 +1,15 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::mpsc::{self, Receiver, Sender},
+};
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind};
 use crossterm::terminal::{ScrollDown, ScrollUp};
 
-use crate::commands;
-use crate::edits::Edit;
 use crate::plugin::{LuaLoader, PlugLoaders, PluginLoader};
 use crate::tabs::Tab;
+use crate::{commands, plugin::PluginMessage};
+use crate::{edits::Edit, plugin::PlugCom};
 
 type RustHandler = fn(&mut App, Vec<String>);
 #[derive(Debug, Clone)]
@@ -15,7 +18,7 @@ pub enum CommandHandler {
     Lua(),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct App {
     pub insert_mode: bool,
     pub running: bool,
@@ -33,6 +36,8 @@ pub struct App {
     pub version: String,
     pub hist_ctr: usize,
     pub plugin_subsys: PlugLoaders,
+    pub plugin_tx: Sender<PluginMessage>,
+    pub plugin_rx: Receiver<PluginMessage>,
 }
 
 impl App {
@@ -55,6 +60,7 @@ impl App {
         let left_ar_us: bool = false;
         let lua_load = LuaLoader::new();
         let pl_sys: PlugLoaders = PlugLoaders::LuaL(lua_load);
+        let (tx, rx) = mpsc::channel();
 
         let mut app = App {
             insert_mode: ins_mod,
@@ -73,6 +79,8 @@ impl App {
             hist_ctr: hist_c,
             left_area_used: left_ar_us,
             plugin_subsys: pl_sys,
+            plugin_tx: tx,
+            plugin_rx: rx,
         };
         app.gen_hashmap_com();
         app
@@ -282,6 +290,20 @@ impl App {
                 _ => {}
             },
             _ => {}
+        }
+    }
+
+    pub fn recv_msg(&mut self) {
+        while let Ok(msg) = self.plugin_rx.try_recv() {
+            match msg {
+                PluginMessage::Command(com) => match com {
+                    PlugCom::StatusMsg(sm) => {
+                        self.throw_status_message(sm);
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
         }
     }
 

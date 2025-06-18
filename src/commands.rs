@@ -1,6 +1,6 @@
 use crate::{
     app::App,
-    plugin::{LoaderSysState, LuaLoader, PlugLoaders},
+    plugin::{LoaderSysState, LuaLoader, LuaPlugin, PlugLoaders},
     tabs::Tab,
 };
 use std::{
@@ -556,7 +556,7 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
             }
         };
         if let Some(lualoader) = lual {
-            match lualoader.load_plug(plug_path.to_string()) {
+            match lualoader.load_plug(plug_path.to_string(), app.plugin_tx.clone()) {
                 Ok(_) => {}
                 Err(e) => {
                     app.throw_status_message(e);
@@ -568,5 +568,63 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
                 format!("Plugin {} successfully loaded.", plugin_name).to_string(),
             );
         }
+        return;
+    }
+    if subcommand == &"info" {
+        if args.len() < 2 {
+            app.throw_status_message("Usage: !plugin info name".to_string());
+            return;
+        }
+        let plug_name = args[1..].join(" ");
+        if let Some(lualoader) = lual {
+            let res_plug: &LuaPlugin = match lualoader.find_plug_by_name_ref(plug_name.to_owned()) {
+                Some(p) => p,
+                None => {
+                    app.throw_status_message(format!(
+                        "Specified plugin {} could not be find. Is it loaded?",
+                        plug_name
+                    ));
+                    return;
+                }
+            };
+            let plug_info: String = format!(
+                "Name: {}\nVersion: {}\nAuthor: {}\nDescription: {}",
+                res_plug.name.clone(),
+                res_plug.version.clone(),
+                res_plug.author.clone(),
+                res_plug.desc.clone()
+            );
+            let mut info_tab: Tab = Tab::new(Some("Plugin info".to_string()));
+            info_tab.str_into_buf(plug_info);
+            app.tabs.push(info_tab);
+            app.cur_tab = app.tabs.len().saturating_sub(1);
+            app.throw_status_message("Plugin info displayed in new tab".to_string());
+            return;
+        }
+        return;
+    }
+    if subcommand == &"unload" {
+        if args.len() < 2 {
+            app.throw_status_message("Usage: !plugin info name".to_string());
+            return;
+        }
+        let plug_name = args[1..].join(" ");
+
+        if let Some(lualoader) = lual {
+            let res_plug_id = match lualoader.find_plug_ind_by_name(plug_name.to_string()) {
+                Some(id) => id,
+                None => {
+                    app.throw_status_message(format!(
+                        "Specified plugin {} could not be find",
+                        plug_name
+                    ));
+                    return;
+                }
+            };
+            lualoader.unload_plugin_ind(res_plug_id);
+            app.throw_status_message("Success".to_string());
+            return;
+        }
+        return;
     }
 }

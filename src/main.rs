@@ -52,6 +52,7 @@ fn main() {
             .expect("failed to render frame");
         let event = event::read().expect("failed to read event");
         app.handle_input(event);
+        app.recv_msg();
     }
     std::io::stdout().execute(DisableMouseCapture).unwrap();
     ratatui::restore();

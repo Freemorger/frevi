@@ -1,6 +1,9 @@
 ## CHANGELOG v4
+- Maybe I was wrong in my readme statement...
+- Plugin loader
+- Channels for plugin && app communication
 
 ## TODO
-Plugin loader traits
-Lua plugin loader struct
-Plugin api
+- Editor events
+- Better plugin api overall...
+- Frevi dotfiles and plugin autoload

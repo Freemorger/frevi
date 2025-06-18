@@ -1,6 +1,9 @@
-use std::fs::{self, File};
+use std::{
+    fs::{self, File},
+    sync::mpsc::{self, Receiver, Sender},
+};
 
-use mlua::Lua;
+use mlua::{Function, Lua, Value};
 
 pub trait PluginLoader {}
 
@@ -32,7 +35,7 @@ impl LuaLoader {
             state: state,
         }
     }
-    pub fn load_plug(&mut self, path: String) -> Result<(), String> {
+    pub fn load_plug(&mut self, path: String, tx: Sender<PluginMessage>) -> Result<(), String> {
         let mut plug = LuaPlugin::new();
         let plug_buf: String = match fs::read_to_string(path) {
             Ok(f) => f,
@@ -62,13 +65,68 @@ impl LuaLoader {
             .get("PLUGIN_VERSION")
             .unwrap_or("v1.0.0".to_string());
 
+        plug.load_defaults(tx.clone());
+
+        let init_func: Value = globals.get("onInit").unwrap();
+        match init_func {
+            Value::Function(lf) => {
+                let init_func_res = lf.call::<()>(());
+                if let Err(e) = init_func_res {
+                    tx.send(PluginMessage::Error(e.to_string()));
+                }
+            }
+            _ => {}
+        }
+
         self.plugins.push(plug);
 
         Ok(())
     }
+    pub fn unload_plugin_ref(&mut self, plug: &LuaPlugin) -> Result<(), String> {
+        for (i, p) in self.plugins.iter().enumerate() {
+            if std::ptr::eq(p, plug) {
+                self.plugins.remove(i);
+                return Ok(());
+            }
+        }
+        return Err("Specified plugin could not be found".to_string());
+    }
+    pub fn unload_plugin_ind(&mut self, ind: usize) {
+        if (ind >= self.plugins.len()) {
+            return;
+        }
+        self.plugins.remove(ind);
+    }
+    pub fn find_plug_by_name_ref(&self, name: String) -> Option<&LuaPlugin> {
+        for p in &self.plugins {
+            if p.name == name {
+                return Some(p);
+            }
+        }
+        None
+    }
+    pub fn find_plug_ind_by_name(&mut self, name: String) -> Option<usize> {
+        for (i, p) in self.plugins.iter().enumerate() {
+            if p.name == name {
+                return Some(i);
+            }
+        }
+        None
+    }
 }
 
 impl PluginLoader for LuaLoader {}
+
+#[derive(Debug, Clone)]
+pub enum PlugCom {
+    StatusMsg(String),
+}
+
+#[derive(Debug, Clone)]
+pub enum PluginMessage {
+    Command(PlugCom),
+    Error(String),
+}
 
 #[derive(Debug, Clone)]
 pub struct LuaPlugin {
@@ -88,5 +146,23 @@ impl LuaPlugin {
             version: String::new(),
             desc: String::new(),
         }
+    }
+    fn load_defaults(&mut self, tx: Sender<PluginMessage>) {
+        let globals = self.lua.globals();
+
+        let tx_status = tx.clone();
+        let print_stat_func = match self.lua.create_function(move |_, msg: String| {
+            tx_status
+                .send(PluginMessage::Command(PlugCom::StatusMsg(msg)))
+                .map_err(|e| mlua::Error::RuntimeError(format!("Failed to send message: {}", e)))?;
+            Ok(())
+        }) {
+            Ok(lf) => lf,
+            Err(e) => {
+                tx.send(PluginMessage::Error(e.to_string()));
+                return;
+            }
+        };
+        globals.set("frevi_status_msg", print_stat_func);
     }
 }
