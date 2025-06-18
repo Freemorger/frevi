@@ -4,6 +4,7 @@ use crate::{
     tabs::Tab,
 };
 use std::{
+    fmt::format,
     fs::File,
     io::{BufRead, BufReader, Write},
     process::Command,
@@ -577,7 +578,7 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
         }
         let plug_name = args[1..].join(" ");
         if let Some(lualoader) = lual {
-            let res_plug: &LuaPlugin = match lualoader.find_plug_by_name_ref(plug_name.to_owned()) {
+            let plug_id: usize = match lualoader.find_plug_ind_by_name(plug_name.to_owned()) {
                 Some(p) => p,
                 None => {
                     app.throw_status_message(format!(
@@ -587,8 +588,10 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
                     return;
                 }
             };
+            let res_plug: &LuaPlugin = lualoader.plugins.get(plug_id).unwrap();
             let plug_info: String = format!(
-                "Name: {}\nVersion: {}\nAuthor: {}\nDescription: {}",
+                "Current ID: {}\nName: {}\nVersion: {}\nAuthor: {}\nDescription: {}",
+                plug_id,
                 res_plug.name.clone(),
                 res_plug.version.clone(),
                 res_plug.author.clone(),
@@ -600,6 +603,35 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
             app.cur_tab = app.tabs.len().saturating_sub(1);
             app.throw_status_message("Plugin info displayed in new tab".to_string());
             return;
+        }
+        return;
+    }
+    if subcommand == &"info-id" {
+        if args.len() < 2 {
+            app.throw_status_message("Usage: !plugin unload-id id".to_string());
+            return;
+        }
+        let id: usize = args[1].parse().unwrap();
+        if let Some(lualoader) = lual {
+            let plug = match lualoader.plugins.get(id) {
+                Some(p) => p,
+                None => {
+                    app.throw_status_message("Can't get plugin with specified ID!".to_owned());
+                    return;
+                }
+            };
+            let info = format!(
+                "Name: {}\nVersion: {}\nAuthor: {}\nDescription: {}",
+                plug.name.clone(),
+                plug.version.clone(),
+                plug.author.clone(),
+                plug.desc.clone()
+            );
+            let mut info_tab: Tab = Tab::new(Some(format!("Plugin ID {} info", id)));
+            info_tab.str_into_buf(info);
+            app.tabs.push(info_tab);
+            app.cur_tab = app.tabs.len().saturating_sub(1);
+            app.throw_status_message("Plugin info opened at new tab".to_string());
         }
         return;
     }
@@ -624,6 +656,33 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
             lualoader.unload_plugin_ind(res_plug_id);
             app.throw_status_message("Success".to_string());
             return;
+        }
+        return;
+    }
+    if subcommand == &"unload-id" {
+        if args.len() < 2 {
+            app.throw_status_message("Usage: !plugin unload-id id".to_string());
+            return;
+        }
+        let id: usize = args[1].parse().unwrap();
+        if let Some(lualoader) = lual {
+            lualoader.unload_plugin_ind(id);
+            app.throw_status_message("Success".to_string());
+        }
+        return;
+    }
+    if subcommand == &"list" {
+        if let Some(lualoader) = lual {
+            let mut list_buf: Vec<String> = Vec::new();
+            for (i, p) in lualoader.plugins.iter().enumerate() {
+                let curplug_info = format!("ID: {}, Name: {}", i, p.name.clone());
+                list_buf.push(curplug_info);
+            }
+            let mut list_tab: Tab = Tab::new(Some("Plugin list".to_string()));
+            list_tab.buf = list_buf;
+            app.tabs.push(list_tab);
+            app.cur_tab = app.tabs.len().saturating_sub(1);
+            app.throw_status_message("Plugin list displayed in new tab".to_string());
         }
         return;
     }

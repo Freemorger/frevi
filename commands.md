@@ -1,34 +1,36 @@
 A guide to default editor commands.
-| Command                      | Description                                                       | Args                  |
-|------------------------------|-------------------------------------------------------------------|-----------------------|
-| [!hi](#hi)                   | Prints "hi"                                                       | -                     |
-| [!w](#w)                     | Writes current tab buffer to a file (filename argument is optional)| filename              |
-| [!r](#r)                     | Reads file into current tab; warns if there are unsaved changes    | filename              |
-| [!ri](#ri)                   | Reads file into current tab, even with unsaved changes             | filename              |
-| [!rn](#rn)                   | Reads file into a new tab                                          | filename              |
-| [!q](#q)                     | Quits the editor; warns if there are unsaved changes               | -                     |
-| [!qi](#qi)                   | Quits the editor, even with unsaved changes                        | -                     |
-| [!exec](#exec)               | Executes a command; shows stdout in the status bar                 | command               |
-| [!execn](#execn)             | Executes a command; shows stdout in a new tab                      | command               |
-| [!exec_f](#exec_f)           | Executes a script/executable file; shows stdout in the status bar  | filename              |
-| [!execn_f](#execn_f)         | Executes a script/executable file; shows stdout in a new tab       | filename              |
-| [!version](#version)         | Prints the current editor version in the status bar                | -                     |
-| [!tab](#tab)                 | Tabs manager utility                                               | -                     |
-| [!tab new](#tab-new)         | Creates a new tab                                                  | -                     |
-| [!tab goto](#tab-goto)       | Switches to tab by its number                                      | num                   |
-| [!tab rm](#tab-rm)           | Closes tab by its number                                           | num                   |
-| [!tab next](#tab-next)       | Opens the next tab                                                 | -                     |
-| [!tab prev](#tab-prev)       | Opens the previous tab                                             | -                     |
-| [!tab rename](#tab-rename)   | Renames the specified tab                                          | [num] [new name]      |
-| [!alias](#alias)             | Aliases manager                                                   | -                     |
-| [!alias new](#alias-new)     | Creates new alias                                                  | [alias_name] [com]    |
-| [!alias rm](#alias-rm)       | Removes existing alias                                             | [alias_name]          |
-| [!plugin](#plugin)           | Plugin manager                                                    | -                     |
-| [!plugin load](#plugin-load) | Loads a plugin from its path                                       | path                  |
-| [!plugin unload](#plugin-unload) | Unloads a plugin by its name                                  | name                  |
-| [!plugin info](#plugin-info) | Displays plugin information in new tab (name, version, author, description) | name          |
-| [!plugin state](#plugin-state)| Displays plugin loader state                                      | -                     |
-
+| Command                           | Description                                                                     | Args    |
+|------------------------------------|---------------------------------------------------------------------------------|---------|
+| [!hi](#hi)                        | Prints "hi"                                                                     | -       |
+| [!w](#w)                          | Writes current tab buffer to a file (filename argument is optional)             | filename|
+| [!r](#r)                          | Reads file into current tab; warns if there are unsaved changes                 | filename|
+| [!ri](#ri)                        | Reads file into current tab, even with unsaved changes                          | filename|
+| [!rn](#rn)                        | Reads file into a new tab                                                        | filename|
+| [!q](#q)                          | Quits the editor; warns if there are unsaved changes                            | -       |
+| [!qi](#qi)                        | Quits the editor, even with unsaved changes                                     | -       |
+| [!exec](#exec)                    | Executes a command; shows stdout in the status bar                              | command |
+| [!execn](#execn)                  | Executes a command; shows stdout in a new tab                                   | command |
+| [!exec_f](#exec_f)                | Executes a script/executable file; shows stdout in the status bar               | filename|
+| [!execn_f](#execn_f)              | Executes a script/executable file; shows stdout in a new tab                    | filename|
+| [!version](#version)              | Prints the current editor version in the status bar                             | -       |
+| [!tab](#tab)                      | Tabs manager utility                                                            | -       |
+| [!tab new](#tab-new)              | Creates a new tab                                                               | -       |
+| [!tab goto](#tab-goto)            | Switches to tab by its number                                                   | num     |
+| [!tab rm](#tab-rm)                | Closes tab by its number                                                        | num     |
+| [!tab next](#tab-next)            | Opens the next tab                                                              | -       |
+| [!tab prev](#tab-prev)            | Opens the previous tab                                                          | -       |
+| [!tab rename](#tab-rename)        | Renames the specified tab                                                       | [num] [new name]|
+| [!alias](#alias)                  | Aliases manager                                                                 | -       |
+| [!alias new](#alias-new)          | Creates new alias                                                               | [alias_name] [com]|
+| [!alias rm](#alias-rm)            | Removes existing alias                                                          | [alias_name]|
+| [!plugin](#plugin)                | Plugin manager                                                                  | -       |
+| [!plugin load](#plugin-load)       | Loads a plugin from its path                                                    | path    |
+| [!plugin unload](#plugin-unload)   | Unloads a plugin by its name                                                    | name    |
+| [!plugin unload-id](#plugin-unload-id) | Unloads a plugin by its current ID in plugin system                      | ID      |
+| [!plugin info](#plugin-info)       | Displays plugin information in new tab (name, version, author, description)     | name    |
+| [!plugin info-id](#plugin-info-id) | Displays plugin information in new tab (name, version, author, description), by its ID in plugin system | ID |
+| [!plugin state](#plugin-state)     | Displays plugin loader state                                                    | -       |
+| [!plugin list](#plugin-list)       | Lists all loaded plugins in plugin subsystem, displaying ID and name of each plugin | -   |
 
 
 ## !hi
@@ -135,9 +137,20 @@ Args: path
 ### !plugin unload
 Unloads a plugin by its name.
 Args: name
+### !plugin unload-id
+Unloads a plugin by its current ID in plugin system.
+Args: ID
 ### !plugin info
 Displays a plugin information in new tab (name, version, author, description).
 Args: name
+### !plugin info-id
+Displays a plugin information in new tab (name, version, author, description),
+by its ID in plugin sys.
+Args: ID
 ### !plugin state
 Displays plugin loader state.
+Args: -
+### !plugin list
+Lists all loaded plugins in plug subsys,
+Displaying ID and name of each plugin.
 Args: -

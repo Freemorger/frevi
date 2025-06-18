@@ -1,10 +1,12 @@
 use std::{
+    char,
     collections::HashMap,
     sync::mpsc::{self, Receiver, Sender},
 };
 
 use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind};
 use crossterm::terminal::{ScrollDown, ScrollUp};
+use mlua::Function;
 
 use crate::plugin::{LuaLoader, PlugLoaders, PluginLoader};
 use crate::tabs::Tab;
@@ -15,7 +17,7 @@ type RustHandler = fn(&mut App, Vec<String>);
 #[derive(Debug, Clone)]
 pub enum CommandHandler {
     Rust(RustHandler),
-    Lua(),
+    Lua(Function, usize), // usize for plugin id.
 }
 
 #[derive(Debug)]
@@ -302,6 +304,9 @@ impl App {
                     }
                     _ => {}
                 },
+                PluginMessage::RegisterCommand(name, handlr, id) => {
+                    self.commands.insert(name, CommandHandler::Lua(handlr, id));
+                }
                 _ => {}
             }
         }
@@ -456,14 +461,52 @@ impl App {
         }
         let mut args: Vec<String> = lexems.into_iter().skip(1).collect();
         res_args.append(&mut args);
+        let mut to_throw: Option<String> = None;
 
-        match self.commands.get(res_com) {
+        match self.commands.get(&(res_com.clone())) {
             Some(handler) => match handler {
-                CommandHandler::Rust(f) => f(self, res_args),
-                CommandHandler::Lua() => {}
+                CommandHandler::Rust(f) => f(self, res_args.clone()),
+                CommandHandler::Lua(lf, id) => {
+                    let PlugLoaders::LuaL(lualoader) = &self.plugin_subsys;
+                    match lualoader.plugins.get(id.clone()) {
+                        Some(plug) => {
+                            let args_table =
+                                plug.lua.create_table().map_err(|e| e.to_string()).unwrap();
+                            for (i, arg) in res_args.iter().enumerate() {
+                                args_table
+                                    .set(i + 1, arg.clone())
+                                    .map_err(|e| e.to_string())
+                                    .unwrap();
+                            }
+                            let res = lf.call::<()>(&args_table);
+                            match res {
+                                Err(e) => {
+                                    to_throw = Some(e.to_string());
+                                }
+                                _ => {}
+                            }
+                        }
+                        None => {
+                            self.throw_status_message(format!(
+                                "Can't get plugin with id {}",
+                                id.clone()
+                            ));
+                            return;
+                        }
+                    }
+
+                    // debug
+                    if let Some(m) = to_throw {
+                        self.throw_status_message(m);
+                    } else {
+                        self.throw_status_message(res_com.clone());
+                    }
+                }
+                _ => {}
             },
             None => {
                 self.throw_status_message("ERR: No such command".to_string());
+                return;
             }
         };
     }

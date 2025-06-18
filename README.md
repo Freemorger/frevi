@@ -1,5 +1,5 @@
 # A simple Vi-like TUI text editor on Rust.
-Dependencies: ratatui, crossterm latest
+Dependencies: ratatui, crossterm, mlua latest
 ## Current features:
 - Command/insert mode
 - Simple command parses
@@ -9,5 +9,5 @@ Dependencies: ratatui, crossterm latest
 ## Default commands:
 - See commands.md
 ## Planned features:
-- Plugin system and manager for Lua plugins
-- Edit history
+- Finish plugin system
+- mb edit history

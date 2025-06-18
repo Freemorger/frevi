@@ -65,7 +65,7 @@ impl LuaLoader {
             .get("PLUGIN_VERSION")
             .unwrap_or("v1.0.0".to_string());
 
-        plug.load_defaults(tx.clone());
+        plug.load_defaults(tx.clone(), self.plugins.len());
 
         let init_func: Value = globals.get("onInit").unwrap();
         match init_func {
@@ -125,12 +125,22 @@ pub enum PlugCom {
 #[derive(Debug, Clone)]
 pub enum PluginMessage {
     Command(PlugCom),
+    Event(AppEvent),
+    RegisterCommand(String, Function, usize), // lua func!; usize for plug id
     Error(String),
 }
 
 #[derive(Debug, Clone)]
+pub enum AppEvent {
+    KeyChar(char),
+    KeySpace(String),  // word before
+    FileLoad(String),  //filename
+    FileWrite(String), //filename
+}
+
+#[derive(Debug, Clone)]
 pub struct LuaPlugin {
-    lua: Lua,
+    pub lua: Lua,
     pub name: String,
     pub author: String,
     pub version: String,
@@ -147,7 +157,7 @@ impl LuaPlugin {
             desc: String::new(),
         }
     }
-    fn load_defaults(&mut self, tx: Sender<PluginMessage>) {
+    fn load_defaults(&mut self, tx: Sender<PluginMessage>, plugID: usize) {
         let globals = self.lua.globals();
 
         let tx_status = tx.clone();
@@ -163,6 +173,29 @@ impl LuaPlugin {
                 return;
             }
         };
-        globals.set("frevi_status_msg", print_stat_func);
+        globals.set("frevi_stat_msg", print_stat_func);
+        let tx_com = tx.clone();
+        let reg_com_func =
+            match self
+                .lua
+                .create_function(move |lua, (name, handler): (String, Function)| {
+                    tx_com
+                        .send(PluginMessage::RegisterCommand(
+                            name.clone(),
+                            handler,
+                            plugID,
+                        ))
+                        .map_err(|e| {
+                            mlua::Error::RuntimeError(format!("Failed to send message: {}", e))
+                        })?;
+                    Ok(())
+                }) {
+                Ok(lf) => lf,
+                Err(e) => {
+                    tx.send(PluginMessage::Error(e.to_string()));
+                    return;
+                }
+            };
+        globals.set("frevi_reg_com", reg_com_func);
     }
 }
