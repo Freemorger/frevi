@@ -1,6 +1,8 @@
 mod app;
 mod commands;
+mod dotfiles;
 mod edits;
+mod logger;
 mod plugin;
 mod tabs;
 use crate::app::App;

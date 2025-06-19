@@ -1,5 +1,6 @@
 use crate::{
     app::App,
+    logger::LogLevel,
     plugin::{LoaderSysState, LuaLoader, LuaPlugin, PlugLoaders},
     tabs::Tab,
 };
@@ -61,6 +62,13 @@ pub fn com_r(app: &mut App, args: Vec<String>) {
 
     let file_in: File = match File::open(args[0].clone()) {
         Ok(f) => f,
+        Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
+            curtab.filename = args[0].clone();
+            curtab.changed = false;
+            curtab.cursor_xy = (0, 0);
+            app.throw_status_message(e.to_string());
+            return;
+        }
         Err(e) => {
             app.throw_status_message(e.to_string());
             return;
@@ -560,7 +568,8 @@ pub fn com_plugin(app: &mut App, args: Vec<String>) {
             match lualoader.load_plug(plug_path.to_string(), app.plugin_tx.clone()) {
                 Ok(_) => {}
                 Err(e) => {
-                    app.throw_status_message(e);
+                    let _ = app.logger.log_msg(LogLevel::PluginFault, e);
+                    app.throw_status_message("Plugin load returned error. Check logs".to_string());
                     return;
                 }
             }

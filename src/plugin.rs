@@ -5,7 +5,13 @@ use std::{
 
 use mlua::{Function, Lua, Value};
 
-pub trait PluginLoader {}
+pub trait PluginLoader {
+    fn load_plugs_lines(
+        &mut self,
+        lines: Vec<String>,
+        tx: Sender<PluginMessage>,
+    ) -> Result<(), Vec<String>>; // vec of errors if there such
+}
 
 #[derive(Debug, Clone)]
 pub enum PlugLoaders {
@@ -115,7 +121,27 @@ impl LuaLoader {
     }
 }
 
-impl PluginLoader for LuaLoader {}
+impl PluginLoader for LuaLoader {
+    fn load_plugs_lines(
+        &mut self,
+        lines: Vec<String>,
+        tx: Sender<PluginMessage>,
+    ) -> Result<(), Vec<String>> {
+        let mut errors: Vec<String> = Vec::new();
+        for line in lines {
+            match self.load_plug(line.clone(), tx.clone()) {
+                Ok(_) => {}
+                Err(e) => {
+                    errors.push(e.to_string());
+                }
+            }
+        }
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum PlugCom {

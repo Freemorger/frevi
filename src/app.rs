@@ -1,6 +1,8 @@
+use core::panic;
 use std::{
     char,
     collections::HashMap,
+    fmt::format,
     sync::mpsc::{self, Receiver, Sender},
 };
 
@@ -8,10 +10,13 @@ use crossterm::event::{Event, KeyCode, KeyEventKind, MouseEvent, MouseEventKind}
 use crossterm::terminal::{ScrollDown, ScrollUp};
 use mlua::Function;
 
-use crate::plugin::{LuaLoader, PlugLoaders, PluginLoader};
-use crate::tabs::Tab;
-use crate::{commands, plugin::PluginMessage};
+use crate::{commands, logger::LogLevel, plugin::PluginMessage};
+use crate::{
+    dotfiles::FreviConfig,
+    plugin::{LuaLoader, PlugLoaders, PluginLoader},
+};
 use crate::{edits::Edit, plugin::PlugCom};
+use crate::{logger::Logger, tabs::Tab};
 
 type RustHandler = fn(&mut App, Vec<String>);
 #[derive(Debug, Clone)]
@@ -40,6 +45,8 @@ pub struct App {
     pub plugin_subsys: PlugLoaders,
     pub plugin_tx: Sender<PluginMessage>,
     pub plugin_rx: Receiver<PluginMessage>,
+    pub config: FreviConfig,
+    pub logger: Logger,
 }
 
 impl App {
@@ -54,15 +61,43 @@ impl App {
         let stat_msg: bool = false;
         let tabsv: Vec<Tab> = vec![Tab::new(None)];
         let curtab: usize = 0;
+
+        let mut build_type: String = String::new();
+        if (cfg!(debug_assertions)) {
+            build_type = "debug".to_string();
+        } else {
+            build_type = "release".to_string();
+        }
         let vers: &str = env!("CARGO_PKG_VERSION");
+        let full_vers = format!("{} {}", vers, build_type);
+
         let com_aliases: HashMap<String, Vec<String>> = HashMap::new();
         let com_hist: Vec<Vec<String>> = Vec::new();
         let hist_c: usize = 0;
+
+        let mut frevi_cfg = FreviConfig::new();
+        let frevi_cfg_load_res = frevi_cfg.read_cfg();
+        let log_path = frevi_cfg.cfg_path.clone().join("latest.log");
+        let str_log_path = log_path.to_string_lossy().to_string();
+
+        let mut logger: Logger = match Logger::new(str_log_path.clone()) {
+            Ok(l) => l,
+            Err(e) => {
+                panic!("{}", &e);
+            }
+        };
+
+        let (tx, rx) = mpsc::channel();
+
         let left_area: Tab = Tab::new(None);
         let left_ar_us: bool = false;
-        let lua_load = LuaLoader::new();
+        let mut lua_load = LuaLoader::new();
+        if let Err(errors) = lua_load.load_plugs_lines(frevi_cfg.autoplugs.clone(), tx.clone()) {
+            for item in errors {
+                logger.log_msg(LogLevel::PluginFault, item.clone());
+            }
+        }
         let pl_sys: PlugLoaders = PlugLoaders::LuaL(lua_load);
-        let (tx, rx) = mpsc::channel();
 
         let mut app = App {
             insert_mode: ins_mod,
@@ -75,7 +110,7 @@ impl App {
             status_message: stat_msg,
             tabs: tabsv,
             cur_tab: curtab,
-            version: vers.to_string(),
+            version: full_vers,
             command_hist: com_hist,
             aliases: com_aliases,
             hist_ctr: hist_c,
@@ -83,8 +118,11 @@ impl App {
             plugin_subsys: pl_sys,
             plugin_tx: tx,
             plugin_rx: rx,
+            config: frevi_cfg,
+            logger: logger,
         };
         app.gen_hashmap_com();
+        app.throw_status_message(str_log_path);
         app
     }
 
